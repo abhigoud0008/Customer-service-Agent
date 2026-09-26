@@ -17,11 +17,27 @@ from livekit.plugins import google
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-# 1. Initialize Firebase
-cred_path = os.path.join(os.path.dirname(__file__), "firebase_credentials.json")
-if not firebase_admin._apps:
+# 1. Initialize Firebase Admin SDK (Cloud Env-Var Aware)
+firebase_json_env = os.getenv("FIREBASE_CREDENTIALS_JSON")
+
+if firebase_json_env:
+    # Production / Railway environment
+    try:
+        cred_info = json.loads(firebase_json_env)
+        cred = credentials.Certificate(cred_info)
+    except Exception as e:
+        logging.error(f"Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
+        raise e
+else:
+    # Local development fallback
+    cred_path = os.path.join(os.path.dirname(_file_), "firebase_credentials.json")
+    if not os.path.exists(cred_path):
+        raise FileNotFoundError(f"Neither FIREBASE_CREDENTIALS_JSON env nor {cred_path} found.")
     cred = credentials.Certificate(cred_path)
+
+if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
+
 db = firestore.client()
 
 # 2. Email Helper (Free Gmail SMTP)
