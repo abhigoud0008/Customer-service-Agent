@@ -1,0 +1,8 @@
+livekit
+livekit-agents
+livekit-plugins-google
+livekit-api
+fastapi
+uvicorn
+python-dotenv
+firebase-admin
