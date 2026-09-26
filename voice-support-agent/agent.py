@@ -30,7 +30,7 @@ if firebase_json_env:
         raise e
 else:
     # Local development fallback
-    cred_path = os.path.join(os.path.dirname(_file_), "firebase_credentials.json")
+    cred_path = os.path.join(os.path.dirname(__file__), "firebase_credentials.json")
     if not os.path.exists(cred_path):
         raise FileNotFoundError(f"Neither FIREBASE_CREDENTIALS_JSON env nor {cred_path} found.")
     cred = credentials.Certificate(cred_path)
