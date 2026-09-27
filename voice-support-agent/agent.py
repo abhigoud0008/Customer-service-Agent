@@ -48,6 +48,7 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
     if not SMTP_SENDER_EMAIL or not SMTP_APP_PASSWORD:
         logging.warning("SMTP credentials not provided; skipping email.")
         return False
+
     try:
         msg = MIMEMultipart()
         msg["From"] = f"Service Desk <{SMTP_SENDER_EMAIL}>"
@@ -65,20 +66,20 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
         )
         msg.attach(MIMEText(body, "plain"))
 
-        try:
-            clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
-            clean_sender = SMTP_SENDER_EMAIL.strip()
+        clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
+        clean_sender = SMTP_SENDER_EMAIL.strip()
 
-            with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-                server.starttls()
-                server.login(clean_sender, clean_password)
-                server.send_message(msg)
-            
-            logging.info(f"Confirmation email successfully sent to {to_email}")
-            return True
-      except Exception as e:
-          logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
-          return False
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls()
+            server.login(clean_sender, clean_password)
+            server.send_message(msg)
+
+        logging.info(f"Confirmation email successfully sent to {to_email}")
+        return True
+    
+    except Exception as e:
+        logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
+        return False
 
 # 3. Synchronous Firestore Functions
 def _sync_check_and_create_ticket(customer_name: str, issue: str, email: str = "") -> dict:
