@@ -69,13 +69,13 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
             clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
             clean_sender = SMTP_SENDER_EMAIL.strip()
 
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
-            server.starttls()
-            server.login(clean_sender, clean_password)
-            server.send_message(msg)
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+                server.starttls()
+                server.login(clean_sender, clean_password)
+                server.send_message(msg)
             
-        logging.info(f"Confirmation email successfully sent to {to_email}")
-        return True
+            logging.info(f"Confirmation email successfully sent to {to_email}")
+            return True
       except Exception as e:
         logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
         return False
