@@ -65,15 +65,19 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
         )
         msg.attach(MIMEText(body, "plain"))
 
+        try:
+        clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
+        clean_sender = SMTP_SENDER_EMAIL.strip()
+
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
             server.starttls()
-            server.login(SMTP_SENDER_EMAIL, SMTP_APP_PASSWORD)
+            server.login(clean_sender, clean_password)
             server.send_message(msg)
-
+            
         logging.info(f"Confirmation email successfully sent to {to_email}")
         return True
-    except Exception as e:
-        logging.error(f"Failed to dispatch email: {e}")
+      except Exception as e:
+        logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
         return False
 
 # 3. Synchronous Firestore Functions
@@ -181,6 +185,9 @@ async def entrypoint(ctx: JobContext):
             "'Please enter your email address in the box given below on the screen and click Submit.' "
             "Keep all responses short, clear, and under 2 sentences."
             "LATENCY DIRECTIVE :Be immediate and direct. Speak as soon as the user finishes.Answer in 1 short sentence whenever possible. Avoid filler phrases."
+            "LATENCY PROTOCOL: - Never exceed 15 words per turn. - Answer immediately. - Do not repeat or rephrase what the user said. - Do not use conversational filler (e.g., 'Sure, I can help with that', 'Certainly'). - Deliver direct, immediate questions or confirmations only."
+            "CRITICAL: Keep all verbal answers under 12 words. Speak immediately. No pleasantries or repetition."
+        
         ),
         tools=[register_customer_issue, check_ticket_status],
     )
@@ -189,10 +196,10 @@ async def entrypoint(ctx: JobContext):
         llm=google.realtime.RealtimeModel(
             model="gemini-2.5-flash-native-audio-preview-12-2025",
             voice="Aoede",
-            temperature=0.25,
+            temperature=0.1,
         ),
-        min_endpointing_delay=0.15,
-        max_endpointing_delay=0.45,
+        min_endpointing_delay=0.08,
+        max_endpointing_delay=0.25,
     )
 
     # Listen for email submission from frontend
