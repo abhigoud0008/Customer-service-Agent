@@ -66,8 +66,8 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
         msg.attach(MIMEText(body, "plain"))
 
         try:
-        clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
-        clean_sender = SMTP_SENDER_EMAIL.strip()
+            clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
+            clean_sender = SMTP_SENDER_EMAIL.strip()
 
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
             server.starttls()
