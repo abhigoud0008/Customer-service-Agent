@@ -180,6 +180,7 @@ async def entrypoint(ctx: JobContext):
             "STEP 3: When the user shares their name and issue, invoke register_customer_issue and ask them: "
             "'Please enter your email address in the box given below on the screen and click Submit.' "
             "Keep all responses short, clear, and under 2 sentences."
+            "LATENCY DIRECTIVE :Be immediate and direct. Speak as soon as the user finishes.Answer in 1 short sentence whenever possible. Avoid filler phrases."
         ),
         tools=[register_customer_issue, check_ticket_status],
     )
@@ -190,8 +191,8 @@ async def entrypoint(ctx: JobContext):
             voice="Aoede",
             temperature=0.25,
         ),
-        min_endpointing_delay=0.3,
-        max_endpointing_delay=0.9,
+        min_endpointing_delay=0.15,
+        max_endpointing_delay=0.45,
     )
 
     # Listen for email submission from frontend
