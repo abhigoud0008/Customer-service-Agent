@@ -142,15 +142,21 @@
           }
         });
 
-        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
-          if (track.kind === "audio") {
-            const el = track.attach();
-            el.id = "agent-audio";
-            el.autoplay = true;
-            document.body.appendChild(el);
-            el.play().catch(e => console.log("Audio playback notice:", e));
-          }
-        });
+       room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+  if (track.kind === "audio") {
+    const el = track.attach();
+    el.id = "agent-audio";
+    el.autoplay = true;
+    document.body.appendChild(el);
+
+    // Explicitly play to clear mobile autoplay restrictions
+    el.play().catch((err) => {
+      console.warn("Audio autoplay blocked by mobile browser:", err);
+      statusText.textContent = "Tap anywhere on the screen to enable agent audio.";
+      document.body.addEventListener("click", () => el.play(), { once: true });
+    });
+  }
+});
 
         room.on(LivekitClient.RoomEvent.Disconnected, () => {
           const oldAudio = document.getElementById("agent-audio");
