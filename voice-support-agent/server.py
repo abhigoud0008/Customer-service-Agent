@@ -1,5 +1,5 @@
 import os
-import uvicorn
+import uuid
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from livekit import api
@@ -9,26 +9,36 @@ load_dotenv()
 
 app = FastAPI()
 
-# Allow browser calls from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+LIVEKIT_API_KEY = os.getenv("APIaXSLvd8JfCon")
+LIVEKIT_API_SECRET = os.getenv("YyVvszb26v7BhwoiIeccN4MeeyuLBx0Z9zUYGAz1CEMB")
+LIVEKIT_URL = os.getenv("wss://customer-service-agent-44fnvuqu.livekit.cloud")
+
+@app.get("/")
+async def health_check():
+    """Endpoint for cron-job.org to keep Render alive with 200 OK."""
+    return {"status": "healthy", "service": "livekit-token-server"}
+
 @app.get("/token")
-async def get_token(room: str = "support-desk", name: str = "customer"):
-    api_key = os.getenv("APIaXSLvd8JfCon")
-    api_secret = os.getenv("YyVvszb26v7BhwoiIeccN4MeeyuLBx0Z9zUYGAz1CEMB")
+async def get_token():
+    """Generates unique room and participant identity for every caller."""
+    unique_user = f"user-{uuid.uuid4().hex[:6]}"
+    unique_room = f"support-{uuid.uuid4().hex[:6]}"
 
-    token = (
-        api.AccessToken(api_key, api_secret)
-        .with_identity(name)
-        .with_name(name)
-        .with_grants(api.VideoGrants(room_join=True, room=room))
-    )
-    return {"token": token.to_jwt()}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
+        .with_identity(unique_user) \
+        .with_name("Customer") \
+        .with_grants(api.VideoGrants(
+            room_join=True,
+            room=unique_room,
+            can_publish=True,
+            can_subscribe=True
+        ))
+    return {"token": token.to_jwt(), "room": unique_room}
