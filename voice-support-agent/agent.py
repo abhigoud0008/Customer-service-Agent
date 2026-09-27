@@ -77,8 +77,8 @@ def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, 
             logging.info(f"Confirmation email successfully sent to {to_email}")
             return True
       except Exception as e:
-        logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
-        return False
+          logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
+          return False
 
 # 3. Synchronous Firestore Functions
 def _sync_check_and_create_ticket(customer_name: str, issue: str, email: str = "") -> dict:
