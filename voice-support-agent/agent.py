@@ -1,38 +1,50 @@
 import os
 import json
-import asyncio
 import logging
 import smtplib
+import asyncio
+from typing import Annotated
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timezone
-import firebase_admin
-from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 
-from livekit import agents
-from livekit.agents import AgentSession, Agent, JobContext, function_tool, RunContext
+import firebase_admin
+from firebase_admin import credentials, firestore
+from livekit.agents import (
+    AutoSubscribe,
+    JobContext,
+    WorkerOptions,
+    cli,
+    llm,
+)
+from livekit.agents.multimodal import AgentSession
 from livekit.plugins import google
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-# 1. Initialize Firebase Admin SDK (Cloud Env-Var Aware)
-firebase_json_env = os.getenv("FIREBASE_CREDENTIALS_JSON")
+# ==========================================
+# 1. Credentials & Firebase Setup
+# ==========================================
+LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
+SMTP_SENDER_EMAIL = os.getenv("SMTP_SENDER_EMAIL", "").strip()
+SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD", "").replace(" ", "").strip()
+
+firebase_json_env = os.getenv("FIREBASE_CREDENTIALS_JSON")
 if firebase_json_env:
-    # Production / Railway environment
     try:
-        cred_info = json.loads(firebase_json_env)
-        cred = credentials.Certificate(cred_info)
+        cred = credentials.Certificate(json.loads(firebase_json_env))
     except Exception as e:
-        logging.error(f"Failed to parse FIREBASE_CREDENTIALS_JSON: {e}")
+        logging.error(f"Error parsing FIREBASE_CREDENTIALS_JSON: {e}")
         raise e
 else:
-    # Local development fallback
     cred_path = os.path.join(os.path.dirname(__file__), "firebase_credentials.json")
     if not os.path.exists(cred_path):
-        raise FileNotFoundError(f"Neither FIREBASE_CREDENTIALS_JSON env nor {cred_path} found.")
+        raise FileNotFoundError("Missing Firebase credentials.")
     cred = credentials.Certificate(cred_path)
 
 if not firebase_admin._apps:
@@ -40,217 +52,226 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# 2. Email Helper (Free Gmail SMTP)
-SMTP_SENDER_EMAIL = os.getenv("SMTP_SENDER_EMAIL")
-SMTP_APP_PASSWORD = os.getenv("SMTP_APP_PASSWORD")
-
-def _send_email_notification(to_email: str, customer_name: str, ticket_id: str, issue: str) -> bool:
-    if not SMTP_SENDER_EMAIL or not SMTP_APP_PASSWORD:
-        logging.warning("SMTP credentials not provided; skipping email.")
+# ==========================================
+# 2. Non-Blocking Email Dispatch
+# ==========================================
+def _send_email_sync(customer_name: str, to_email: str, ticket_id: str, issue: str, status: str = "Open") -> bool:
+    if not SMTP_SENDER_EMAIL or not SMTP_APP_PASSWORD or not to_email:
         return False
 
     try:
         msg = MIMEMultipart()
-        msg["From"] = f"Service Desk <{SMTP_SENDER_EMAIL}>"
+        msg["From"] = f"Customer Service <{SMTP_SENDER_EMAIL}>"
         msg["To"] = to_email
-        msg["Subject"] = f"Support Ticket Confirmation - #{ticket_id}"
+        msg["Subject"] = f"Support Ticket Registered: #{ticket_id}"
 
         body = (
             f"Dear {customer_name},\n\n"
             f"Your support ticket has been registered successfully.\n\n"
             f"Ticket ID: #{ticket_id}\n"
             f"Issue Reported: {issue}\n"
-            f"Status: Open\n\n"
-            f"Our technical support team is processing your request.\n\n"
-            f"Best regards,\nCustomer Support Team"
+            f"Status: {status}\n\n"
+            f"Our team will resolve this promptly.\n\n"
+            f"Warm regards,\nCustomer Support Desk"
         )
         msg.attach(MIMEText(body, "plain"))
 
-        clean_password = SMTP_APP_PASSWORD.replace(" ", "").strip()
-        clean_sender = SMTP_SENDER_EMAIL.strip()
-
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=8) as server:
             server.starttls()
-            server.login(clean_sender, clean_password)
+            server.login(SMTP_SENDER_EMAIL, SMTP_APP_PASSWORD)
             server.send_message(msg)
 
-        logging.info(f"Confirmation email successfully sent to {to_email}")
+        logging.info(f"Email sent successfully to {to_email}")
         return True
-    
     except Exception as e:
-        logging.error(f"CRITICAL: Failed to dispatch email: {repr(e)}")
+        logging.error(f"SMTP Error: {e}")
         return False
 
-# 3. Synchronous Firestore Functions
-def _sync_check_and_create_ticket(customer_name: str, issue: str, email: str = "") -> dict:
-    """Check for existing tickets with the same issue before creating a new one."""
-    tickets_ref = db.collection("tickets")
-    
-    # Query open tickets for this customer
-    existing_docs = tickets_ref.where("customer_name", "==", customer_name).where("status", "==", "Open").stream()
-    
-    for doc in existing_docs:
-        data = doc.to_dict()
-        existing_issue = data.get("issue", "").strip().lower()
-        if existing_issue and (existing_issue in issue.lower() or issue.lower() in existing_issue):
-            # Duplicate issue detected
-            return {
-                "status": "duplicate",
-                "ticket_id": data.get("ticket_id", doc.id[:6]),
-                "issue": data.get("issue")
-            }
-
-    # If not a duplicate, create a new ticket
-    new_doc = tickets_ref.document()
-    ticket_id = new_doc.id[:6]
-    new_doc.set({
-        "ticket_id": ticket_id,
-        "customer_name": customer_name,
-        "issue": issue,
-        "email": email,
-        "status": "Open",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-
-    if email:
-        _send_email_notification(email, customer_name, ticket_id, issue)
-
-    return {"status": "created", "ticket_id": ticket_id}
-
-# 4. Agent Tools
-caller_context = {
-    "name": None,
-    "issue": None,
-    "language": "English",
-}
-
-@function_tool()
-async def register_customer_issue(ctx: RunContext, customer_name: str, issue_description: str) -> str:
-    """Call this tool IMMEDIATELY when the customer mentions their name and explains their issue.
-    This saves their details so they can type their email."""
-    caller_context["name"] = customer_name
-    caller_context["issue"] = issue_description
-    logging.info(f"Captured caller: {customer_name}, issue: {issue_description}")
-    return "Details noted. Now ask the customer in their chosen language to enter their email in the box on their screen and click Submit."
-
-@function_tool()
-async def check_ticket_status(ctx: RunContext, ticket_id: str) -> str:
-    """Look up the status of an existing ticket by its ID."""
+# ==========================================
+# 3. Synchronous Firestore Helpers
+# ==========================================
+def _sync_create_ticket(customer_name: str, issue: str, email: str = "", order_id: str = "", escalated: bool = False) -> dict:
     try:
-        def _check():
-            docs = db.collection("tickets").where("ticket_id", "==", ticket_id.strip()).limit(1).stream()
-            for doc in docs:
-                d = doc.to_dict()
-                return f"Ticket #{ticket_id} is currently {d.get('status')}. Issue: {d.get('issue')}."
-            return f"No ticket found with ID {ticket_id}."
-        return await asyncio.to_thread(_check)
+        ticket_id = f"TICK-{os.urandom(3).hex().upper()}"
+        status = "ESCALATED_TO_HUMAN" if escalated else "Open"
+        data = {
+            "customer_name": customer_name.strip(),
+            "customer_name_lower": customer_name.strip().lower(),
+            "issue": issue,
+            "email": email.strip().lower(),
+            "order_id": order_id.strip(),
+            "status": status,
+            "priority": "HIGH" if escalated else "NORMAL",
+            "created_at": firestore.SERVER_TIMESTAMP,
+        }
+        db.collection("tickets").document(ticket_id).set(data)
+        return {"ticket_id": ticket_id, "status": status}
     except Exception as e:
-        return "Database lookup error."
+        return {"error": str(e), "ticket_id": f"TICK-{os.urandom(2).hex().upper()}", "status": "Pending"}
 
-# 5. Main Entrypoint
+def _sync_lookup_order(identifier: str) -> dict:
+    try:
+        doc = db.collection("orders").document(identifier.strip()).get()
+        if doc.exists:
+            return {"found": True, "order": doc.to_dict()}
+        return {"found": False}
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+def _sync_query_user_tickets(query_val: str) -> list:
+    results = []
+    clean_val = query_val.strip().lower()
+    tickets_ref = db.collection("tickets")
+
+    # Match by email
+    email_docs = tickets_ref.where("email", "==", clean_val).stream()
+    for d in email_docs:
+        data = d.to_dict()
+        results.append({
+            "ticket_id": d.id,
+            "issue": data.get("issue", "No description"),
+            "status": data.get("status", "Open")
+        })
+
+    # Match by customer name if none found by email
+    if not results:
+        name_docs = tickets_ref.where("customer_name_lower", "==", clean_val).stream()
+        for d in name_docs:
+            data = d.to_dict()
+            results.append({
+                "ticket_id": d.id,
+                "issue": data.get("issue", "No description"),
+                "status": data.get("status", "Open")
+            })
+
+    return results
+
+# ==========================================
+# 4. LLM Function Tools
+# ==========================================
+@llm.ai_callable(description="Look up customer account or order details by order ID.")
+async def lookup_order(
+    order_id: Annotated[str, llm.TypeInfo(description="The order ID to check")]
+) -> str:
+    res = await asyncio.to_thread(_sync_lookup_order, order_id)
+    if res.get("found"):
+        o = res["order"]
+        return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
+    return f"No record found for order #{order_id}."
+
+@llm.ai_callable(description="Look up all tickets registered under a customer name or email address.")
+async def query_user_tickets(
+    search_term: Annotated[str, llm.TypeInfo(description="Customer name or email address")]
+) -> str:
+    tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
+    if not tickets:
+        return f"I checked our records, and there are currently no support tickets found under {search_term}."
+    
+    total = len(tickets)
+    details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
+    return f"You have {total} ticket(s) on file: {details}."
+
+@llm.ai_callable(description="Register a new customer support ticket.")
+async def create_support_ticket(
+    customer_name: Annotated[str, llm.TypeInfo(description="Name of the customer")],
+    issue: Annotated[str, llm.TypeInfo(description="Description of the issue or problem")],
+    order_id: Annotated[str, llm.TypeInfo(description="Order ID if provided")] = "",
+) -> str:
+    res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
+    return f"Ticket created successfully. The ticket number is #{res['ticket_id']}. Status is {res['status']}."
+
+@llm.ai_callable(description="Escalate call directly to a senior human agent or manager.")
+async def escalate_to_human(
+    customer_name: Annotated[str, llm.TypeInfo(description="Name of the customer")],
+    reason: Annotated[str, llm.TypeInfo(description="Reason for human escalation")]
+) -> str:
+    res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
+    return f"I have escalated your request to a senior supervisor under priority ticket #{res['ticket_id']}."
+
+# ==========================================
+# 5. Agent Session Execution
+# ==========================================
 async def entrypoint(ctx: JobContext):
-    await ctx.connect(auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
-    await ctx.wait_for_participant()
+    await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
 
-    inactivity_task = None
+    session_state = {
+        "email": "",
+        "customer_name": "Customer",
+        "last_ticket_id": "",
+        "last_issue": "",
+    }
 
-    async def auto_disconnect_after_delay(delay: float = 8.0):
-        """Wait 8 seconds; if caller remains silent, say goodbye and disconnect."""
-        try:
-            await asyncio.sleep(delay)
-            logging.info("8 seconds elapsed with no user response. Terminating call.")
-            farewell = "Thank you for contacting our customer service. Have a wonderful day. Goodbye!"
-            if caller_context["language"] == "Telugu":
-                farewell = "మా కస్టమర్ సర్వీస్‌ను సంప్రదించినందుకు ధన్యవాదాలు. సెలవు!"
-            elif caller_context["language"] == "Marathi":
-                farewell = "आमच्या ग्राहक सेवेशी संपर्क साधल्याबद्दल धन्यवाद. आपला दिवस चांगला जावो!"
-            elif caller_context["language"] == "Kannada":
-                farewell = "ನಮ್ಮ ಗ್ರಾಹಕ ಸೇವೆಯನ್ನು ಸಂಪರ್ಕಿಸಿದ್ದಕ್ಕಾಗಿ ಧನ್ಯವಾದಗಳು. ದಿನವು ಶುಭವಾಗಿರಲಿ!"
-            elif caller_context["language"] == "Malayalam":
-                farewell = "ഞങ്ങളുടെ കസ്റ്റമർ സർവീസുമായി ബന്ധപ്പെട്ടതിന് നന്ദി. നല്ലൊരു ദിവസം ആശംസിക്കുന്നു!"
-
-            await session.generate_reply(instructions=f"Say: '{farewell}'", allow_interruptions=False)
-            await asyncio.sleep(2.5)
-            await ctx.room.disconnect()
-        except asyncio.CancelledError:
-            logging.info("Timer reset due to user activity.")
-
-    support_agent = Agent(
-        instructions=(
-            "You are an ultra-fast, professional AI customer service assistant. "
-            "STEP 1: The user will choose a language from English, Telugu (తెలుగు), Marathi (मराठी), Kannada (ಕನ್ನಡ), or Malayalam (മലയാളം). "
-            "STEP 2: Once the language is chosen, say: "
-            "'Thank you for choosing our customer service. We provide 24/7 technical repair and warranty support. "
-            "Please tell me your name and the issue you are facing.' (Translate naturally into the chosen language). "
-            "STEP 3: When the user shares their name and issue, invoke register_customer_issue and ask them: "
-            "'Please enter your email address in the box given below on the screen and click Submit.' "
-            "Keep all responses short, clear, and under 2 sentences."
-            "LATENCY DIRECTIVE :Be immediate and direct. Speak as soon as the user finishes.Answer in 1 short sentence whenever possible. Avoid filler phrases."
-            "LATENCY PROTOCOL: - Never exceed 15 words per turn. - Answer immediately. - Do not repeat or rephrase what the user said. - Do not use conversational filler (e.g., 'Sure, I can help with that', 'Certainly'). - Deliver direct, immediate questions or confirmations only."
-            "CRITICAL: Keep all verbal answers under 12 words. Speak immediately. No pleasantries or repetition."
-        
-        ),
-        tools=[register_customer_issue, check_ticket_status],
+    instructions = (
+        "You are an empathetic, polite, and rapid customer service agent. "
+        "TONE: Speak smoothly, warmly, and respectfully at all times. "
+        "LATENCY RULE: Deliver direct answers in 1 to 2 short sentences. Do not use verbose pleasantries or conversational filler. "
+        "WORKFLOW: "
+        "1. Warmly greet the caller, confirm their language preference, and ask how you can help. "
+        "2. If the user asks how many tickets they have or checks previous tickets, ask for their name or email, call 'query_user_tickets', and state the count, ticket ID, and issue clearly. "
+        "3. If they report a new problem, collect their name and issue, then immediately invoke 'create_support_ticket'. Confirm the ticket ID clearly and ask them to type their email in the web box for a receipt. "
+        "4. If the user asks for a human or is dissatisfied, call 'escalate_to_human'. "
     )
 
     session = AgentSession(
         llm=google.realtime.RealtimeModel(
             model="gemini-2.5-flash-native-audio-preview-12-2025",
             voice="Aoede",
-            temperature=0.1,
+            temperature=0.15,
+            instructions=instructions,
         ),
-        min_endpointing_delay=0.08,
-        max_endpointing_delay=0.25,
+        tools=[lookup_order, query_user_tickets, create_support_ticket, escalate_to_human],
+        min_endpointing_delay=0.08,  # Triggers immediately when user finishes speaking
+        max_endpointing_delay=0.25,  # Upper limit on silence wait
     )
 
-    # Listen for email submission from frontend
+    async def broadcast_event(data_dict: dict):
+        try:
+            payload = json.dumps(data_dict).encode("utf-8")
+            await ctx.room.local_participant.publish_data(payload, reliable=True)
+        except Exception as e:
+            logging.warning(f"Data broadcast skipped: {e}")
+
+    # Broadcast transcripts to the browser UI
+    @session.on("agent_speech_committed")
+    def on_agent_speech(msg):
+        asyncio.create_task(broadcast_event({"type": "transcript", "sender": "Agent", "text": msg.content}))
+
+    @session.on("user_speech_committed")
+    def on_user_speech(msg):
+        asyncio.create_task(broadcast_event({"type": "transcript", "sender": "User", "text": msg.content}))
+
+    # Handle incoming web details
     @ctx.room.on("data_received")
     def on_data_received(data_packet):
-        nonlocal inactivity_task
         try:
             payload = json.loads(data_packet.data.decode("utf-8"))
-            if payload.get("type") == "submit_email":
-                user_email = payload.get("email")
-                c_name = caller_context.get("name") or "Valued Customer"
-                c_issue = caller_context.get("issue") or "Technical Support"
+            action = payload.get("type")
 
-                result = _sync_check_and_create_ticket(
-                    customer_name=c_name,
-                    issue=c_issue,
-                    email=user_email
-                )
+            if action == "email_submission":
+                email = payload.get("email", "").strip()
+                session_state["email"] = email
+                logging.info(f"Received customer email: {email}")
 
-                if result["status"] == "duplicate":
-                    reply_prompt = (
-                        f"Tell the caller in their chosen language: 'You have already raised a ticket with ID {result['ticket_id']} "
-                        f"for this same issue. Is there anything else I can help you with?'"
+                if session_state["last_ticket_id"]:
+                    asyncio.create_task(
+                        asyncio.to_thread(
+                            _send_email_sync,
+                            session_state["customer_name"],
+                            email,
+                            session_state["last_ticket_id"],
+                            session_state["last_issue"],
+                        )
                     )
-                else:
-                    reply_prompt = (
-                        f"Tell the caller in their chosen language: 'Your ticket has been created with ID {result['ticket_id']}, "
-                        f"and a confirmation email has been sent to {user_email}. Is there anything else I can help you with?'"
-                    )
+            elif action == "manual_escalate":
+                asyncio.create_task(broadcast_event({
+                    "type": "transcript", 
+                    "sender": "System", 
+                    "text": "Priority escalation requested by user."
+                }))
+        except Exception as err:
+            logging.error(f"Error handling room data: {err}")
 
-                async def handle_post_ticket():
-                    nonlocal inactivity_task
-                    await session.generate_reply(instructions=reply_prompt, allow_interruptions=False)
-                    # Start 8-second countdown after asking "anything else"
-                    inactivity_task = asyncio.create_task(auto_disconnect_after_delay(8.0))
-
-                asyncio.create_task(handle_post_ticket())
-        except Exception as e:
-            logging.error(f"Error handling submitted email: {e}")
-
-    await session.start(
-        room=ctx.room,
-        agent=support_agent,
-    )
-
-    # Initial Prompt
-    await session.generate_reply(
-        instructions="Say: 'Welcome to customer support. Please select your language: English, Telugu, Marathi, Kannada, or Malayalam.'",
-        allow_interruptions=False,
-    )
+    session.start(ctx.room)
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
