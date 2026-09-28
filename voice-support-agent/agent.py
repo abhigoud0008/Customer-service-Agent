@@ -14,9 +14,10 @@ from livekit.agents import (
     JobContext,
     WorkerOptions,
     cli,
+    llm,
 )
-from livekit.agents.voice import Agent, AgentSession
-from livekit.plugins import google
+from livekit.agents.voice import VoicePipelineAgent
+from livekit.plugins import google, silero
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -143,34 +144,35 @@ def _sync_query_user_tickets(query_val: str) -> list:
     return results
 
 # ==========================================
-# 4. LLM Function Tools
+# 4. LLM Function Tools (FunctionContext)
 # ==========================================
-async def lookup_order(order_id: str) -> str:
-    """Look up customer account or order details by order ID."""
-    res = await asyncio.to_thread(_sync_lookup_order, order_id)
-    if res.get("found"):
-        o = res["order"]
-        return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
-    return f"No record found for order #{order_id}."
+class SupportFunctionContext(llm.FunctionContext):
+    @llm.ai_callable(description="Look up customer account or order details by order ID.")
+    async def lookup_order(self, order_id: str) -> str:
+        res = await asyncio.to_thread(_sync_lookup_order, order_id)
+        if res.get("found"):
+            o = res["order"]
+            return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
+        return f"No record found for order #{order_id}."
 
-async def query_user_tickets(search_term: str) -> str:
-    """Look up all tickets registered under a customer name or email address."""
-    tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
-    if not tickets:
-        return f"No support tickets found under {search_term}."
-    total = len(tickets)
-    details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
-    return f"Found {total} ticket(s): {details}."
+    @llm.ai_callable(description="Look up all tickets registered under a customer name or email address.")
+    async def query_user_tickets(self, search_term: str) -> str:
+        tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
+        if not tickets:
+            return f"No support tickets found under {search_term}."
+        total = len(tickets)
+        details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
+        return f"Found {total} ticket(s): {details}."
 
-async def create_support_ticket(customer_name: str, issue: str, order_id: str = "") -> str:
-    """Register a new customer support ticket."""
-    res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
-    return f"Ticket created under #{res['ticket_id']}. Status: {res['status']}."
+    @llm.ai_callable(description="Register a new customer support ticket.")
+    async def create_support_ticket(self, customer_name: str, issue: str, order_id: str = "") -> str:
+        res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
+        return f"Ticket created under #{res['ticket_id']}. Status: {res['status']}."
 
-async def escalate_to_human(customer_name: str, reason: str) -> str:
-    """Escalate call directly to a senior human agent or manager."""
-    res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
-    return f"Escalated to supervisor under priority ticket #{res['ticket_id']}."
+    @llm.ai_callable(description="Escalate call directly to a senior human agent or manager.")
+    async def escalate_to_human(self, customer_name: str, reason: str) -> str:
+        res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
+        return f"Escalated to supervisor under priority ticket #{res['ticket_id']}."
 
 # ==========================================
 # 5. Agent Session Execution
@@ -186,32 +188,28 @@ async def entrypoint(ctx: JobContext):
     }
 
     instructions = (
-        "You are an empathetic, polite, and rapid customer service agent. "
-        "TONE: Speak smoothly, warmly, and respectfully at all times. "
-        "LATENCY RULE: Deliver direct answers in 1 to 2 short sentences. Do not use verbose pleasantries or filler. "
-        "WORKFLOW: "
-        "1. Warmly greet the caller, welcome them to customer support, and ask how you can help them today. "
-        "2. If the user asks how many tickets they have or checks previous tickets, ask for their name or email, call 'query_user_tickets', and state the count, ticket ID, and issue clearly. "
-        "3. If they report a new problem, collect their name and issue, then immediately invoke 'create_support_ticket'. Confirm the ticket ID clearly and ask them to type their email in the web box for a receipt. "
-        "4. If the user asks for a human or is dissatisfied, call 'escalate_to_human'."
+        "You are an empathetic, polite, and rapid customer service agent.\n"
+        "RESPONSE RULES:\n"
+        "- Deliver direct answers in 1 to 2 short sentences. Never give long explanations.\n"
+        "- Adapt instantly to whatever language the user selects (e.g. English, Hindi, Telugu, Spanish, etc.) and continue the entire conversation in that language.\n\n"
+        "WORKFLOW STEPS:\n"
+        "1. LANGUAGE SELECTION: The call starts with an opening greeting asking the user which language they prefer to speak. Wait for their response and acknowledge their chosen language immediately in that language.\n"
+        "2. CHECK EXISTING TICKETS: If the user asks how many tickets they have or asks about a past issue, ask for their name or email, call query_user_tickets, and clearly state the count and ticket IDs.\n"
+        "3. LOOK UP ORDER: If the user asks about an order, ask for the order ID, call lookup_order, and state the status.\n"
+        "4. CREATE NEW TICKET: If they report an issue, collect their name and problem description, call create_support_ticket, announce the ticket ID clearly, and tell them to enter their email in the web box for a confirmation receipt.\n"
+        "5. ESCALATION: If the user asks for a human supervisor, immediately call escalate_to_human."
     )
 
-    try:
-        agent_def = Agent(instructions=instructions)
-    except TypeError:
-        try:
-            agent_def = Agent(label="support-agent")
-        except TypeError:
-            agent_def = Agent()
-
-    session = AgentSession(
-        llm=google.realtime.RealtimeModel(
-            model="gemini-2.0-flash-realtime-exp",
-            voice="Aoede",
-            temperature=0.15,
-            instructions=instructions,
+    agent = VoicePipelineAgent(
+        vad=ctx.proc.userdata.get("vad"),
+        stt=google.STT(),
+        llm=google.LLM(model="gemini-2.0-flash-exp"),
+        tts=google.TTS(voice_name="Aoede"),
+        chat_ctx=llm.ChatContext().append(
+            role="system",
+            text=instructions,
         ),
-        tools=[lookup_order, query_user_tickets, create_support_ticket, escalate_to_human],
+        fnc_ctx=SupportFunctionContext(),
     )
 
     async def broadcast_event(data_dict: dict):
@@ -221,16 +219,14 @@ async def entrypoint(ctx: JobContext):
         except Exception as e:
             logging.warning(f"Data broadcast skipped: {e}")
 
-    # Broadcast transcripts to the browser UI
-    @session.on("agent_speech_committed")
+    @agent.on("agent_speech_committed")
     def on_agent_speech(msg):
         asyncio.create_task(broadcast_event({"type": "transcript", "sender": "Agent", "text": msg.content}))
 
-    @session.on("user_speech_committed")
+    @agent.on("user_speech_committed")
     def on_user_speech(msg):
         asyncio.create_task(broadcast_event({"type": "transcript", "sender": "User", "text": msg.content}))
 
-    # Handle incoming web details
     @ctx.room.on("data_received")
     def on_data_received(data_packet):
         try:
@@ -261,26 +257,21 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logging.error(f"Error handling room data: {err}")
 
-    # Start session with agent passed as first argument and room as second
-    await session.start(agent_def, ctx.room)
+    # Start the agent in the room
+    agent.start(ctx.room)
 
-    # Trigger welcome greeting immediately
-    try:
-        await session.generate_reply()
-    except Exception as e:
-        logging.warning(f"Initial welcome prompt skipped: {e}")
-
-    # Keep worker process alive while room is active
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        pass
+    # Spoken greeting asking for preferred language first
+    await agent.say(
+        "Welcome to customer support! Which language would you prefer to speak in today?",
+        allow_interruptions=True,
+    )
 
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=lambda proc: proc.userdata.update({"vad": silero.VAD.load()}),
             agent_name="",
         )
     )
+    
