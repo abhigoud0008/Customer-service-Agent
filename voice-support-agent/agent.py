@@ -156,45 +156,32 @@ def _sync_query_user_tickets(query_val: str) -> list:
 # ==========================================
 # 4. LLM Function Tools
 # ==========================================
-@llm.ai_callable(description="Look up customer account or order details by order ID.")
-async def lookup_order(
-    order_id: Annotated[str, llm.TypeInfo(description="The order ID to check")]
-) -> str:
+async def lookup_order(order_id: str) -> str:
+    """Look up customer account or order details by order ID."""
     res = await asyncio.to_thread(_sync_lookup_order, order_id)
     if res.get("found"):
         o = res["order"]
         return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
     return f"No record found for order #{order_id}."
 
-@llm.ai_callable(description="Look up all tickets registered under a customer name or email address.")
-async def query_user_tickets(
-    search_term: Annotated[str, llm.TypeInfo(description="Customer name or email address")]
-) -> str:
+async def query_user_tickets(search_term: str) -> str:
+    """Look up all tickets registered under a customer name or email address."""
     tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
     if not tickets:
-        return f"I checked our records, and there are currently no support tickets found under {search_term}."
-    
+        return f"No support tickets found under {search_term}."
     total = len(tickets)
     details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
-    return f"You have {total} ticket(s) on file: {details}."
+    return f"Found {total} ticket(s): {details}."
 
-@llm.ai_callable(description="Register a new customer support ticket.")
-async def create_support_ticket(
-    customer_name: Annotated[str, llm.TypeInfo(description="Name of the customer")],
-    issue: Annotated[str, llm.TypeInfo(description="Description of the issue or problem")],
-    order_id: Annotated[str, llm.TypeInfo(description="Order ID if provided")] = "",
-) -> str:
+async def create_support_ticket(customer_name: str, issue: str, order_id: str = "") -> str:
+    """Register a new customer support ticket."""
     res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
-    return f"Ticket created successfully. The ticket number is #{res['ticket_id']}. Status is {res['status']}."
+    return f"Ticket created under #{res['ticket_id']}. Status: {res['status']}."
 
-@llm.ai_callable(description="Escalate call directly to a senior human agent or manager.")
-async def escalate_to_human(
-    customer_name: Annotated[str, llm.TypeInfo(description="Name of the customer")],
-    reason: Annotated[str, llm.TypeInfo(description="Reason for human escalation")]
-) -> str:
+async def escalate_to_human(customer_name: str, reason: str) -> str:
+    """Escalate call directly to a senior human agent or manager."""
     res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
-    return f"I have escalated your request to a senior supervisor under priority ticket #{res['ticket_id']}."
-
+    return f"Escalated to supervisor under priority ticket #{res['ticket_id']}."
 # ==========================================
 # 5. Agent Session Execution
 # ==========================================
