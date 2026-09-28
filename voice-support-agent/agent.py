@@ -274,7 +274,7 @@ async def entrypoint(ctx: JobContext):
     while ctx.room.connection_state == "connected":
         await asyncio.sleep(1)
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
