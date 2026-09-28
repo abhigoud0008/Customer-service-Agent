@@ -1,122 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customer Service Voice Desk</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Customer Service Support Desk</title>
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <style>
+    :root {
+      --bg: #0b1120;
+      --card: #1e293b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body {
-      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 14px;
+    }
+    .desk-card {
+      background: var(--card);
+      width: 100%;
+      max-width: 440px;
+      border-radius: 20px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    }
+    h1 { font-size: 1.45rem; text-align: center; margin-bottom: 4px; font-weight: 700; }
+    .subtitle { text-align: center; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 18px; }
+    .status-pill {
+      text-align: center;
+      padding: 10px;
+      border-radius: 10px;
+      background: #0f172a;
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+      color: #38bdf8;
+      border: 1px solid var(--border);
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s ease;
+    }
+    .btn-call { background: var(--accent); }
+    .btn-call.connected { background: var(--danger); }
+    .btn-escalate { background: var(--warning); margin-top: 8px; font-size: 0.85rem; padding: 10px; }
+    .ticket-result-box {
+      margin-top: 14px;
+      padding: 12px;
+      background: #1e3a8a;
+      border: 1px solid #3b82f6;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      display: none;
+    }
+    .ticket-result-box strong { color: #93c5fd; }
+    .section-label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 16px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .transcript-window {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      height: 150px;
+      overflow-y: auto;
+      padding: 10px;
+      font-size: 0.82rem;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      background: #0f172a;
-      color: #f8fafc;
+      gap: 8px;
     }
-    .card {
-      background: #1e293b;
-      padding: 2.2rem;
-      border-radius: 1rem;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-      text-align: center;
-      max-width: 440px;
-      width: 90%;
-    }
-    h1 { font-size: 1.45rem; margin-bottom: 0.5rem; }
-    p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 1.5rem; }
-    button.call-btn {
-      background: #2563eb;
-      color: white;
-      border: none;
-      padding: 0.95rem 1.5rem;
-      border-radius: 9999px;
-      font-size: 1.05rem;
-      font-weight: 600;
-      cursor: pointer;
+    .msg-agent { color: #4ade80; }
+    .msg-user { color: #38bdf8; }
+    .msg-system { color: #f59e0b; font-style: italic; }
+    input {
       width: 100%;
-      transition: background 0.2s;
-    }
-    button.call-btn:hover { background: #1d4ed8; }
-    button.call-btn.connected { background: #dc2626; }
-    #status {
-      margin-top: 1rem;
-      font-size: 0.85rem;
-      color: #38bdf8;
-    }
-    .input-box {
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
-      border-top: 1px solid #334155;
-      text-align: left;
-    }
-    .input-box label {
-      font-size: 0.85rem;
-      color: #cbd5e1;
-      display: block;
-      margin-bottom: 0.4rem;
-    }
-    .input-box input {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      border: 1px solid #475569;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
       background: #0f172a;
-      color: #fff;
-      font-size: 0.95rem;
-      margin-bottom: 0.75rem;
+      color: var(--text);
+      font-size: 0.9rem;
+      margin-bottom: 8px;
       outline: none;
     }
-    .input-box input:focus { border-color: #38bdf8; }
-    .input-box button {
-      background: #10b981;
-      color: white;
-      border: none;
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      width: 100%;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .input-box button:hover { background: #059669; }
-    #email-feedback {
-      margin-top: 0.5rem;
-      font-size: 0.8rem;
-      color: #a7f3d0;
-    }
+    .btn-submit { background: var(--success); font-size: 0.9rem; padding: 10px; }
   </style>
 </head>
 <body>
+  <div class="desk-card">
+    <h1>Support Desk</h1>
+    <div class="subtitle">Real-time ticket creation</div>
 
-  <div class="card">
-    <h1>Smart Service Support Desk</h1>
-    <p>Live AI customer assistance with real-time ticket creation.</p>
-    
-    <button id="callBtn" class="call-btn">📞 Call Support</button>
-    <div id="status">Ready to connect</div>
+    <div id="statusPill" class="status-pill">Ready to connect</div>
 
-    <div class="input-box" id="emailSection">
-      <label for="userEmail">Enter your Email Address:</label>
-      <input type="email" id="userEmail" placeholder="e.g. yourname@example.com" />
-      <button id="sendEmailBtn">Submit Email to Agent</button>
-      <div id="email-feedback"></div>
+    <button id="callBtn" class="btn btn-call">📞 Call Support</button>
+    <button id="escalateBtn" class="btn btn-escalate" style="display: none;">🚨 Escalate to Human</button>
+
+    <div id="ticketResult" class="ticket-result-box">
+      <strong>Active Ticket:</strong> <span id="ticketNumberDisplay">None</span>
     </div>
+
+    <span class="section-label">Live Transcript</span>
+    <div id="transcript" class="transcript-window">
+      <span style="color: var(--text-muted);">Conversation transcript will appear here in real time...</span>
+    </div>
+
+    <span class="section-label">Account & Order Verification</span>
+    <input type="text" id="orderInput" placeholder="Order ID or Account Name" />
+    <input type="email" id="emailInput" placeholder="Email address for ticket receipt" />
+    <button id="submitDetailsBtn" class="btn btn-submit">Submit Details to Agent</button>
   </div>
 
   <script>
-    const LIVEKIT_URL = "wss://customer-service-agent-44fnvuqu.livekit.cloud";
     const TOKEN_ENDPOINT = "https://customer-service-agent-xqd2.onrender.com/token";
+    const LIVEKIT_URL = "wss://customer-service-agent-44fnvuqu.livekit.cloud";
+
+    const callBtn = document.getElementById("callBtn");
+    const escalateBtn = document.getElementById("escalateBtn");
+    const statusPill = document.getElementById("statusPill");
+    const transcript = document.getElementById("transcript");
+    const emailInput = document.getElementById("emailInput");
+    const orderInput = document.getElementById("orderInput");
+    const submitDetailsBtn = document.getElementById("submitDetailsBtn");
+    const ticketResult = document.getElementById("ticketResult");
+    const ticketNumberDisplay = document.getElementById("ticketNumberDisplay");
 
     let room = null;
-    const callBtn = document.getElementById("callBtn");
-    const statusText = document.getElementById("status");
-    const sendEmailBtn = document.getElementById("sendEmailBtn");
-    const userEmailInput = document.getElementById("userEmail");
-    const emailFeedback = document.getElementById("email-feedback");
+
+    function addMessage(sender, text) {
+      if (transcript.children.length === 1 && transcript.children[0].tagName === "SPAN") {
+        transcript.innerHTML = "";
+      }
+      const item = document.createElement("div");
+      if (sender === "Agent") item.className = "msg-agent";
+      else if (sender === "User") item.className = "msg-user";
+      else item.className = "msg-system";
+
+      item.innerHTML = <strong>${sender}:</strong> ${text};
+      transcript.appendChild(item);
+      transcript.scrollTop = transcript.scrollHeight;
+
+      // Extract ticket ID from speech
+      const match = text.match(/(TICK-[A-Z0-9]+)/i);
+      if (match) {
+        ticketResult.style.display = "block";
+        ticketNumberDisplay.textContent = match[1];
+      }
+    }
 
     callBtn.addEventListener("click", async () => {
       if (room && room.state === "connected") {
@@ -125,93 +184,95 @@
       }
 
       try {
-        statusText.textContent = "Connecting to agent...";
+        statusPill.textContent = "Connecting to agent...";
         callBtn.disabled = true;
 
-        const res = await fetch(TOKEN_ENDPOINT);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(TOKEN_ENDPOINT, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) throw new Error("Could not fetch token");
         const data = await res.json();
 
         room = new LivekitClient.Room({
           adaptiveStream: true,
           dynacast: true,
-          audioCaptureDefaults: {
-            sampleRate: 24000,
-            channelCount: 1,
-            echoCancellation: true,
-            noiseSuppression: true,
+        });
+
+        // Mobile-friendly audio element attachment
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+          if (track.kind === "audio") {
+            const el = track.attach();
+            el.id = "agent-audio";
+            el.autoplay = true;
+            document.body.appendChild(el);
+            el.play().catch(e => console.warn("Waiting for browser audio unlock", e));
           }
         });
 
-       room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
-  if (track.kind === "audio") {
-    const el = track.attach();
-    el.id = "agent-audio";
-    el.autoplay = true;
-    document.body.appendChild(el);
-
-    // Explicitly play to clear mobile autoplay restrictions
-    el.play().catch((err) => {
-      console.warn("Audio autoplay blocked by mobile browser:", err);
-      statusText.textContent = "Tap anywhere on the screen to enable agent audio.";
-      document.body.addEventListener("click", () => el.play(), { once: true });
-    });
-  }
-});
+        // Live transcript ingestion
+        room.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
+          try {
+            const evt = JSON.parse(new TextDecoder().decode(payload));
+            if (evt.type === "transcript") {
+              addMessage(evt.sender, evt.text);
+            }
+          } catch (e) {
+            console.error("Data decode error:", e);
+          }
+        });
 
         room.on(LivekitClient.RoomEvent.Disconnected, () => {
-          const oldAudio = document.getElementById("agent-audio");
-          if (oldAudio) oldAudio.remove();
+          const el = document.getElementById("agent-audio");
+          if (el) el.remove();
           callBtn.textContent = "📞 Call Support";
           callBtn.classList.remove("connected");
-          statusText.textContent = "Call ended";
-          userEmailInput.disabled = false;
-          sendEmailBtn.disabled = false;
-          userEmailInput.value = "";
-          emailFeedback.textContent = "";
+          callBtn.disabled = false;
+          escalateBtn.style.display = "none";
+          statusPill.textContent = "Call completed";
         });
 
         await room.connect(LIVEKIT_URL, data.token);
         await room.localParticipant.setMicrophoneEnabled(true);
 
-        callBtn.disabled = false;
         callBtn.textContent = "❌ End Call";
         callBtn.classList.add("connected");
-        statusText.textContent = "Agent is active and listening...";
+        callBtn.disabled = false;
+        escalateBtn.style.display = "block";
+        statusPill.textContent = "Agent active (Sub-second latency)";
       } catch (err) {
         console.error(err);
-        statusText.textContent = "Failed to connect. Check server.";
+        statusPill.textContent = "Connection issue. Please tap Call again.";
         callBtn.disabled = false;
       }
     });
 
-    sendEmailBtn.addEventListener("click", async () => {
-      const email = userEmailInput.value.trim();
-      if (!email || !email.includes("@")) {
-        emailFeedback.textContent = "Please enter a valid email address.";
-        emailFeedback.style.color = "#f87171";
-        return;
-      }
+    submitDetailsBtn.addEventListener("click", async () => {
+      const email = emailInput.value.trim();
+      const order = orderInput.value.trim();
 
       if (!room || room.state !== "connected") {
-        emailFeedback.textContent = "Please connect the call first.";
-        emailFeedback.style.color = "#f87171";
+        alert("Please start the call first.");
         return;
       }
 
-      try {
-        const payload = JSON.stringify({ type: "submit_email", email: email });
-        const encoder = new TextEncoder();
-        await room.localParticipant.publishData(encoder.encode(payload), { reliable: true });
+      const payload = JSON.stringify({
+        type: "email_submission",
+        email: email,
+        order_id: order
+      });
 
-        emailFeedback.textContent = "Email submitted! Agent is verifying and creating your ticket...";
-        emailFeedback.style.color = "#34d399";
-        userEmailInput.disabled = true;
-        sendEmailBtn.disabled = true;
-      } catch (e) {
-        console.error("Error sending email:", e);
-        emailFeedback.textContent = "Failed to transmit email. Try again.";
-        emailFeedback.style.color = "#f87171";
-      }
+      await room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
+      statusPill.textContent = "Details submitted to active agent.";
+      addMessage("User", Submitted Order/Email: ${order || "N/A"} | ${email || "N/A"});
+    });
+
+    escalateBtn.addEventListener("click", async () => {
+      if (!room || room.state !== "connected") return;
+      const payload = JSON.stringify({ type: "manual_escalate" });
+      await room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
+      addMessage("User", "[Requested Immediate Human Escalation]");
     });
   </script>
 </body>
