@@ -17,7 +17,14 @@ from livekit.agents import (
     cli,
     llm,
 )
-from livekit.agents.multimodal import AgentSession
+try:
+    from livekit.agents.voice import AgentSession
+except ImportError:
+    try:
+        from livekit.agents import AgentSession
+    except ImportError:
+        from livekit.agent.multimodal import MultimodalAgent as AgentSession
+        
 from livekit.plugins import google
 
 load_dotenv()
