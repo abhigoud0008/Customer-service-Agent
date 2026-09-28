@@ -208,7 +208,7 @@ async def entrypoint(ctx: JobContext):
 
     session = AgentSession(
         llm=google.realtime.RealtimeModel(
-            model="gemini-2.5-flash-native-audio-preview-12-2025",
+            model="gemini-2.0-flash-realtime-exp",
             voice="Aoede",
             temperature=0.15,
             instructions=instructions,
@@ -266,9 +266,18 @@ async def entrypoint(ctx: JobContext):
             logging.error(f"Error handling room data: {err}")
 
     await session.start(ctx.room)
-    await session.generate_reply(
-        instructions="Politely greet the user in a smooth,respectful tone.Welcome them to support and ask what language they prefer."
-    )
 
-if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint,agent_name="",))
+    # Initial greeting to the user
+    await session.generate_reply()
+
+    # Keep the agent process alive inside the room while user is connected
+    while ctx.room.connection_state == "connected":
+        await asyncio.sleep(1)
+
+if _name_ == "_main_":
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            agent_name="",
+        )
+    )
