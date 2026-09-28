@@ -3,7 +3,6 @@ import json
 import logging
 import smtplib
 import asyncio
-from typing import Annotated
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -17,14 +16,7 @@ from livekit.agents import (
     cli,
     llm,
 )
-try:
-    from livekit.agents.voice import AgentSession
-except ImportError:
-    try:
-        from livekit.agents import AgentSession
-    except ImportError:
-        from livekit.agent.multimodal import MultimodalAgent as AgentSession
-        
+from livekit.agents.multimodal import MultimodalAgent
 from livekit.plugins import google
 
 load_dotenv()
@@ -33,9 +25,9 @@ logging.basicConfig(level=logging.INFO)
 # ==========================================
 # 1. Credentials & Firebase Setup
 # ==========================================
-LIVEKIT_URL = os.getenv("LIVEKIT_URL")
-LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
-LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "wss://customer-service-agent-44fnvuqu.livekit.cloud")
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "APIAXSLvd8JfCon")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "YyVvszb26v7BhwoiIeccN4MeeyuLBx0Z9zUYgaz1cEMB")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 SMTP_SENDER_EMAIL = os.getenv("SMTP_SENDER_EMAIL", "").strip()
@@ -130,7 +122,6 @@ def _sync_query_user_tickets(query_val: str) -> list:
     clean_val = query_val.strip().lower()
     tickets_ref = db.collection("tickets")
 
-    # Match by email
     email_docs = tickets_ref.where("email", "==", clean_val).stream()
     for d in email_docs:
         data = d.to_dict()
@@ -140,7 +131,6 @@ def _sync_query_user_tickets(query_val: str) -> list:
             "status": data.get("status", "Open")
         })
 
-    # Match by customer name if none found by email
     if not results:
         name_docs = tickets_ref.where("customer_name_lower", "==", clean_val).stream()
         for d in name_docs:
@@ -154,34 +144,36 @@ def _sync_query_user_tickets(query_val: str) -> list:
     return results
 
 # ==========================================
-# 4. LLM Function Tools
+# 4. LLM Function Tools (FunctionContext)
 # ==========================================
-async def lookup_order(order_id: str) -> str:
-    """Look up customer account or order details by order ID."""
-    res = await asyncio.to_thread(_sync_lookup_order, order_id)
-    if res.get("found"):
-        o = res["order"]
-        return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
-    return f"No record found for order #{order_id}."
+class SupportFunctionContext(llm.FunctionContext):
+    @llm.ai_callable(description="Look up customer account or order details by order ID.")
+    async def lookup_order(self, order_id: str) -> str:
+        res = await asyncio.to_thread(_sync_lookup_order, order_id)
+        if res.get("found"):
+            o = res["order"]
+            return f"Order details: status is {o.get('status', 'Processing')}, items: {o.get('item', 'Standard order')}."
+        return f"No record found for order #{order_id}."
 
-async def query_user_tickets(search_term: str) -> str:
-    """Look up all tickets registered under a customer name or email address."""
-    tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
-    if not tickets:
-        return f"No support tickets found under {search_term}."
-    total = len(tickets)
-    details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
-    return f"Found {total} ticket(s): {details}."
+    @llm.ai_callable(description="Look up all tickets registered under a customer name or email address.")
+    async def query_user_tickets(self, search_term: str) -> str:
+        tickets = await asyncio.to_thread(_sync_query_user_tickets, search_term)
+        if not tickets:
+            return f"No support tickets found under {search_term}."
+        total = len(tickets)
+        details = ", ".join([f"Ticket #{t['ticket_id']} for {t['issue']} is {t['status']}" for t in tickets])
+        return f"Found {total} ticket(s): {details}."
 
-async def create_support_ticket(customer_name: str, issue: str, order_id: str = "") -> str:
-    """Register a new customer support ticket."""
-    res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
-    return f"Ticket created under #{res['ticket_id']}. Status: {res['status']}."
+    @llm.ai_callable(description="Register a new customer support ticket.")
+    async def create_support_ticket(self, customer_name: str, issue: str, order_id: str = "") -> str:
+        res = await asyncio.to_thread(_sync_create_ticket, customer_name, issue, "", order_id, False)
+        return f"Ticket created under #{res['ticket_id']}. Status: {res['status']}."
 
-async def escalate_to_human(customer_name: str, reason: str) -> str:
-    """Escalate call directly to a senior human agent or manager."""
-    res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
-    return f"Escalated to supervisor under priority ticket #{res['ticket_id']}."
+    @llm.ai_callable(description="Escalate call directly to a senior human agent or manager.")
+    async def escalate_to_human(self, customer_name: str, reason: str) -> str:
+        res = await asyncio.to_thread(_sync_create_ticket, customer_name, reason, "", "", True)
+        return f"Escalated to supervisor under priority ticket #{res['ticket_id']}."
+
 # ==========================================
 # 5. Agent Session Execution
 # ==========================================
@@ -200,22 +192,22 @@ async def entrypoint(ctx: JobContext):
         "TONE: Speak smoothly, warmly, and respectfully at all times. "
         "LATENCY RULE: Deliver direct answers in 1 to 2 short sentences. Do not use verbose pleasantries or conversational filler. "
         "WORKFLOW: "
-        "1. Warmly greet the caller, confirm their language preference, and ask how you can help. "
+        "1. Warmly greet the caller, welcome them to customer support, and ask how you can help them today. "
         "2. If the user asks how many tickets they have or checks previous tickets, ask for their name or email, call 'query_user_tickets', and state the count, ticket ID, and issue clearly. "
         "3. If they report a new problem, collect their name and issue, then immediately invoke 'create_support_ticket'. Confirm the ticket ID clearly and ask them to type their email in the web box for a receipt. "
-        "4. If the user asks for a human or is dissatisfied, call 'escalate_to_human'. "
+        "4. If the user asks for a human or is dissatisfied, call 'escalate_to_human'."
     )
 
-    session = AgentSession(
-        llm=google.realtime.RealtimeModel(
-            model="gemini-2.0-flash-realtime-exp",
-            voice="Aoede",
-            temperature=0.15,
-            instructions=instructions,
-        ),
-        tools=[lookup_order, query_user_tickets, create_support_ticket, escalate_to_human],
-        min_endpointing_delay=0.08,  # Triggers immediately when user finishes speaking
-        max_endpointing_delay=0.25,  # Upper limit on silence wait
+    model = google.realtime.RealtimeModel(
+        model="gemini-2.0-flash-realtime-exp",
+        voice="Aoede",
+        temperature=0.15,
+        instructions=instructions,
+    )
+
+    agent = MultimodalAgent(
+        model=model,
+        fnc_ctx=SupportFunctionContext(),
     )
 
     async def broadcast_event(data_dict: dict):
@@ -226,11 +218,11 @@ async def entrypoint(ctx: JobContext):
             logging.warning(f"Data broadcast skipped: {e}")
 
     # Broadcast transcripts to the browser UI
-    @session.on("agent_speech_committed")
+    @agent.on("agent_speech_committed")
     def on_agent_speech(msg):
         asyncio.create_task(broadcast_event({"type": "transcript", "sender": "Agent", "text": msg.content}))
 
-    @session.on("user_speech_committed")
+    @agent.on("user_speech_committed")
     def on_user_speech(msg):
         asyncio.create_task(broadcast_event({"type": "transcript", "sender": "User", "text": msg.content}))
 
@@ -265,12 +257,24 @@ async def entrypoint(ctx: JobContext):
         except Exception as err:
             logging.error(f"Error handling room data: {err}")
 
-    await session.start(ctx.room)
+    # Start multimodal agent connected to this room
+    await agent.start(ctx.room)
 
-    # Initial greeting to the user
-    await session.generate_reply()
+    # Trigger initial spoken greeting from the agent immediately
+    try:
+        session = agent.current_session
+        if session:
+            await session.conversation.item.create(
+                llm.ChatMessage(
+                    role="user",
+                    content="Hello. Greet me warmly right now: say 'Welcome to Customer Support! How can I help you today?'",
+                )
+            )
+            await session.response.create()
+    except Exception as e:
+        logging.warning(f"Initial welcome prompt skipped: {e}")
 
-    # Keep the agent process alive inside the room while user is connected
+    # Keep worker process alive while room connection remains active
     while ctx.room.connection_state == "connected":
         await asyncio.sleep(1)
 
