@@ -1,10 +1,19 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+
   <title>Customer Service Support Desk</title>
+
+  <!-- LiveKit Client -->
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+
   <style>
     :root {
       --bg: #0b1120;
@@ -17,7 +26,19 @@
       --text-muted: #94a3b8;
       --border: #334155;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        sans-serif;
+    }
+
     body {
       background-color: var(--bg);
       color: var(--text);
@@ -27,6 +48,7 @@
       min-height: 100vh;
       padding: 14px;
     }
+
     .desk-card {
       background: var(--card);
       width: 100%;
@@ -34,10 +56,23 @@
       border-radius: 20px;
       padding: 24px;
       border: 1px solid var(--border);
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
     }
-    h1 { font-size: 1.45rem; text-align: center; margin-bottom: 4px; font-weight: 700; }
-    .subtitle { text-align: center; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 18px; }
+
+    h1 {
+      font-size: 1.45rem;
+      text-align: center;
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 18px;
+    }
+
     .status-pill {
       text-align: center;
       padding: 10px;
@@ -48,6 +83,7 @@
       color: #38bdf8;
       border: 1px solid var(--border);
     }
+
     .btn {
       width: 100%;
       padding: 14px;
@@ -62,9 +98,27 @@
       align-items: center;
       gap: 8px;
     }
-    .btn-call { background: var(--accent); }
-    .btn-call.connected { background: var(--danger); }
-    .btn-escalate { background: var(--warning); margin-top: 8px; font-size: 0.85rem; padding: 10px; }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-call {
+      background: var(--accent);
+    }
+
+    .btn-call.connected {
+      background: var(--danger);
+    }
+
+    .btn-escalate {
+      background: var(--warning);
+      margin-top: 8px;
+      font-size: 0.85rem;
+      padding: 10px;
+    }
+
     .ticket-result-box {
       margin-top: 14px;
       padding: 12px;
@@ -74,7 +128,11 @@
       font-size: 0.85rem;
       display: none;
     }
-    .ticket-result-box strong { color: #93c5fd; }
+
+    .ticket-result-box strong {
+      color: #93c5fd;
+    }
+
     .section-label {
       display: block;
       font-size: 0.75rem;
@@ -84,11 +142,12 @@
       text-transform: uppercase;
       font-weight: 700;
     }
+
     .transcript-window {
       background: #0f172a;
       border: 1px solid var(--border);
       border-radius: 10px;
-      height: 140px;
+      height: 180px;
       overflow-y: auto;
       padding: 10px;
       font-size: 0.82rem;
@@ -96,9 +155,20 @@
       flex-direction: column;
       gap: 8px;
     }
-    .msg-agent { color: #4ade80; }
-    .msg-user { color: #38bdf8; }
-    .msg-system { color: #f59e0b; font-style: italic; }
+
+    .msg-agent {
+      color: #4ade80;
+    }
+
+    .msg-user {
+      color: #38bdf8;
+    }
+
+    .msg-system {
+      color: #f59e0b;
+      font-style: italic;
+    }
+
     input {
       width: 100%;
       padding: 10px 12px;
@@ -110,165 +180,986 @@
       margin-bottom: 8px;
       outline: none;
     }
-    .btn-submit { background: var(--success); font-size: 0.9rem; padding: 10px; }
+
+    input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-submit {
+      background: var(--success);
+      font-size: 0.9rem;
+      padding: 10px;
+    }
+
+    .small-note {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      margin-top: 12px;
+    }
   </style>
 </head>
+
 <body>
+
   <div class="desk-card">
-    <h1>Support Desk</h1>
-    <div class="subtitle">Real-time ticket creation</div>
 
-    <div id="statusPill" class="status-pill">Ready to connect</div>
+    <h1>Customer Support Desk</h1>
 
-    <button id="callBtn" class="btn btn-call">📞 Call Support</button>
-    <button id="escalateBtn" class="btn btn-escalate" style="display: none;">🚨 Escalate to Human</button>
+    <div class="subtitle">
+      Real-time AI customer service
+    </div>
 
+    <div id="statusPill" class="status-pill">
+      Ready to connect
+    </div>
+
+    <!-- CALL BUTTON -->
+    <button id="callBtn" class="btn btn-call">
+      📞 Call Support
+    </button>
+
+    <!-- HUMAN ESCALATION -->
+    <button
+      id="escalateBtn"
+      class="btn btn-escalate"
+      style="display: none;"
+    >
+      🚨 Escalate to Human
+    </button>
+
+    <!-- TICKET -->
     <div id="ticketResult" class="ticket-result-box">
-      <strong>Active Ticket:</strong> <span id="ticketNumberDisplay">None</span>
+      <strong>Active Ticket:</strong>
+      <span id="ticketNumberDisplay">None</span>
     </div>
 
-    <span class="section-label">Live Transcript</span>
+    <!-- TRANSCRIPT -->
+    <span class="section-label">
+      Live Transcript
+    </span>
+
     <div id="transcript" class="transcript-window">
-      <span style="color: var(--text-muted);">Conversation transcript will appear here in real time...</span>
+      <span id="transcriptPlaceholder" style="color: var(--text-muted);">
+        Conversation transcript will appear here in real time...
+      </span>
     </div>
 
-    <span class="section-label">Account & Order Verification</span>
-    <input type="text" id="orderInput" placeholder="Order ID or Account Name" />
-    <input type="email" id="emailInput" placeholder="Email address for ticket receipt" />
-    <button id="submitDetailsBtn" class="btn btn-submit">Submit Details to Agent</button>
+    <!-- ACCOUNT DETAILS -->
+    <span class="section-label">
+      Account & Order Verification
+    </span>
+
+    <input
+      type="text"
+      id="orderInput"
+      placeholder="Order ID or Account Name"
+      autocomplete="off"
+    />
+
+    <input
+      type="email"
+      id="emailInput"
+      placeholder="Email address for ticket receipt"
+      autocomplete="email"
+    />
+
+    <button
+      id="submitDetailsBtn"
+      class="btn btn-submit"
+    >
+      Submit Details to Agent
+    </button>
+
+    <div class="small-note">
+      Secure real-time AI support
+    </div>
+
   </div>
 
- <script>
-    const TOKEN_ENDPOINT = "https://customer-service-agent-xqd2.onrender.com/token";
-    const LIVEKIT_URL = "wss://customer-service-agent-44fnvuqu.livekit.cloud";
+  <script>
 
-    const callBtn = document.getElementById("callBtn");
-    const escalateBtn = document.getElementById("escalateBtn");
-    const statusPill = document.getElementById("statusPill");
-    const transcript = document.getElementById("transcript");
-    const emailInput = document.getElementById("emailInput");
-    const orderInput = document.getElementById("orderInput");
-    const submitDetailsBtn = document.getElementById("submitDetailsBtn");
-    const ticketResult = document.getElementById("ticketResult");
-    const ticketNumberDisplay = document.getElementById("ticketNumberDisplay");
+    /* =========================================================
+       CONFIGURATION
+    ========================================================= */
+
+    const TOKEN_ENDPOINT =
+      "https://customer-service-agent-xqd2.onrender.com/token";
+
+    const LIVEKIT_URL =
+      "wss://customer-service-agent-44fnvuqu.livekit.cloud";
+
+
+    /* =========================================================
+       DOM ELEMENTS
+    ========================================================= */
+
+    const callBtn =
+      document.getElementById("callBtn");
+
+    const escalateBtn =
+      document.getElementById("escalateBtn");
+
+    const statusPill =
+      document.getElementById("statusPill");
+
+    const transcript =
+      document.getElementById("transcript");
+
+    const transcriptPlaceholder =
+      document.getElementById("transcriptPlaceholder");
+
+    const emailInput =
+      document.getElementById("emailInput");
+
+    const orderInput =
+      document.getElementById("orderInput");
+
+    const submitDetailsBtn =
+      document.getElementById("submitDetailsBtn");
+
+    const ticketResult =
+      document.getElementById("ticketResult");
+
+    const ticketNumberDisplay =
+      document.getElementById("ticketNumberDisplay");
+
+
+    /* =========================================================
+       STATE
+    ========================================================= */
 
     let currentRoom = null;
 
-    function addMessage(sender, text) {
-      if (transcript.children.length === 1 && transcript.children[0].tagName === "SPAN") {
-        transcript.innerHTML = "";
+
+    /* =========================================================
+       CHECK LIVEKIT
+    ========================================================= */
+
+    function checkLiveKit() {
+
+      if (typeof LivekitClient === "undefined") {
+
+        console.error(
+          "LiveKit Client library was not loaded."
+        );
+
+        statusPill.textContent =
+          "LiveKit library failed to load.";
+
+        callBtn.disabled = true;
+
+        return false;
       }
-      const item = document.createElement("div");
-      if (sender === "Agent") item.className = "msg-agent";
-      else if (sender === "User") item.className = "msg-user";
-      else item.className = "msg-system";
 
-      item.innerHTML = "<strong>" + sender + ":</strong> " + text;
+      console.log(
+        "LiveKit Client loaded successfully."
+      );
+
+      return true;
+    }
+
+
+    /* =========================================================
+       ADD TRANSCRIPT MESSAGE
+    ========================================================= */
+
+    function addMessage(sender, text) {
+
+      if (!text) {
+        return;
+      }
+
+      /* Remove placeholder */
+
+      if (transcriptPlaceholder) {
+        transcriptPlaceholder.remove();
+      }
+
+
+      /* Create message container */
+
+      const item =
+        document.createElement("div");
+
+
+      /* Apply sender style */
+
+      if (sender === "Agent") {
+
+        item.className =
+          "msg-agent";
+
+      } else if (sender === "User") {
+
+        item.className =
+          "msg-user";
+
+      } else {
+
+        item.className =
+          "msg-system";
+      }
+
+
+      /* Prevent HTML injection */
+
+      const strong =
+        document.createElement("strong");
+
+      strong.textContent =
+        sender + ":";
+
+
+      const messageText =
+        document.createTextNode(
+          " " + text
+        );
+
+
+      item.appendChild(strong);
+      item.appendChild(messageText);
+
+
       transcript.appendChild(item);
-      transcript.scrollTop = transcript.scrollHeight;
 
-      const match = text.match(/(TICK-[A-Z0-9]+)/i);
+
+      /* Scroll to bottom */
+
+      transcript.scrollTop =
+        transcript.scrollHeight;
+
+
+      /* =====================================================
+         DETECT TICKET NUMBER
+      ===================================================== */
+
+      const match =
+        text.match(/TICK-[A-Z0-9-]+/i);
+
       if (match) {
-        ticketResult.style.display = "block";
-        ticketNumberDisplay.textContent = match[1];
+
+        ticketResult.style.display =
+          "block";
+
+        ticketNumberDisplay.textContent =
+          match[0].toUpperCase();
       }
     }
 
-    callBtn.addEventListener("click", async () => {
-      if (currentRoom && currentRoom.state === "connected") {
-        await currentRoom.disconnect();
-        return;
-      }
+
+    /* =========================================================
+       HANDLE LIVEKIT DATA
+    ========================================================= */
+
+    function handleDataReceived(payload) {
 
       try {
-        statusPill.textContent = "Connecting to agent...";
-        callBtn.disabled = true;
 
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 15000);
-        const res = await fetch(TOKEN_ENDPOINT, { signal: controller.signal });
-        clearTimeout(timer);
+        const decoded =
+          new TextDecoder().decode(payload);
 
-        if (!res.ok) throw new Error("Token request failed");
-        const data = await res.json();
+        console.log(
+          "LiveKit data received:",
+          decoded
+        );
 
-        currentRoom = new LivekitClient.Room({
-          adaptiveStream: true,
-          dynacast: true
-        });
 
-        currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
-          if (track.kind === "audio") {
-            const el = track.attach();
-            el.id = "agent-audio-element";
-            document.body.appendChild(el);
-            el.play().catch(e => console.warn("Audio autoplay blocked:", e));
+        const evt =
+          JSON.parse(decoded);
+
+
+        /* -------------------------------
+           TRANSCRIPT EVENT
+        -------------------------------- */
+
+        if (evt.type === "transcript") {
+
+          addMessage(
+            evt.sender || "Agent",
+            evt.text || ""
+          );
+
+          return;
+        }
+
+
+        /* -------------------------------
+           TICKET EVENT
+        -------------------------------- */
+
+        if (evt.type === "ticket_created") {
+
+          if (evt.ticket_id) {
+
+            ticketResult.style.display =
+              "block";
+
+            ticketNumberDisplay.textContent =
+              evt.ticket_id;
+
           }
-        });
 
-        currentRoom.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
-          try {
-            const evt = JSON.parse(new TextDecoder().decode(payload));
-            if (evt.type === "transcript") {
-              addMessage(evt.sender, evt.text);
+          addMessage(
+            "System",
+            "Ticket created: " +
+            (evt.ticket_id || "Unknown")
+          );
+
+          return;
+        }
+
+
+        /* -------------------------------
+           STATUS EVENT
+        -------------------------------- */
+
+        if (evt.type === "status") {
+
+          if (evt.message) {
+
+            statusPill.textContent =
+              evt.message;
+
+          }
+
+          return;
+        }
+
+
+      } catch (error) {
+
+        console.error(
+          "Data payload parsing error:",
+          error
+        );
+
+      }
+    }
+
+
+    /* =========================================================
+       CLEANUP AUDIO
+    ========================================================= */
+
+    function removeAgentAudio() {
+
+      const audio =
+        document.getElementById(
+          "agent-audio-element"
+        );
+
+      if (audio) {
+        audio.remove();
+      }
+    }
+
+
+    /* =========================================================
+       DISCONNECT HANDLER
+    ========================================================= */
+
+    function handleDisconnect() {
+
+      console.log(
+        "LiveKit room disconnected."
+      );
+
+
+      removeAgentAudio();
+
+
+      callBtn.textContent =
+        "📞 Call Support";
+
+      callBtn.classList.remove(
+        "connected"
+      );
+
+      callBtn.disabled = false;
+
+
+      escalateBtn.style.display =
+        "none";
+
+
+      statusPill.textContent =
+        "Call disconnected";
+
+
+      currentRoom = null;
+    }
+
+
+    /* =========================================================
+       CALL SUPPORT
+    ========================================================= */
+
+    callBtn.addEventListener(
+      "click",
+      async () => {
+
+        /* -----------------------------------------
+           END CURRENT CALL
+        ------------------------------------------ */
+
+        if (
+          currentRoom &&
+          currentRoom.state === "connected"
+        ) {
+
+          await currentRoom.disconnect();
+
+          return;
+        }
+
+
+        /* -----------------------------------------
+           CHECK LIVEKIT
+        ------------------------------------------ */
+
+        if (!checkLiveKit()) {
+          return;
+        }
+
+
+        try {
+
+          statusPill.textContent =
+            "Connecting to AI agent...";
+
+          callBtn.disabled = true;
+
+
+          /* -----------------------------------------
+             REQUEST TOKEN
+          ------------------------------------------ */
+
+          const controller =
+            new AbortController();
+
+
+          const timer =
+            setTimeout(
+              () => controller.abort(),
+              15000
+            );
+
+
+          const response =
+            await fetch(
+              TOKEN_ENDPOINT,
+              {
+                method: "GET",
+                signal: controller.signal,
+                headers: {
+                  "Accept":
+                    "application/json"
+                }
+              }
+            );
+
+
+          clearTimeout(timer);
+
+
+          if (!response.ok) {
+
+            throw new Error(
+              "Token request failed. HTTP " +
+              response.status
+            );
+          }
+
+
+          const data =
+            await response.json();
+
+
+          console.log(
+            "Token response received."
+          );
+
+
+          if (!data.token) {
+
+            throw new Error(
+              "Token missing from server response."
+            );
+          }
+
+
+          /* -----------------------------------------
+             CREATE LIVEKIT ROOM
+          ------------------------------------------ */
+
+          currentRoom =
+            new LivekitClient.Room({
+              adaptiveStream: true,
+              dynacast: true
+            });
+
+
+          /* -----------------------------------------
+             TRACK SUBSCRIBED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.TrackSubscribed,
+            (
+              track,
+              publication,
+              participant
+            ) => {
+
+              console.log(
+                "Track subscribed:",
+                track.kind,
+                participant?.identity
+              );
+
+
+              if (
+                track.kind ===
+                LivekitClient.Track.Kind.Audio
+              ) {
+
+                removeAgentAudio();
+
+
+                const audioElement =
+                  track.attach();
+
+
+                audioElement.id =
+                  "agent-audio-element";
+
+
+                audioElement.autoplay =
+                  true;
+
+
+                audioElement.controls =
+                  false;
+
+
+                document.body.appendChild(
+                  audioElement
+                );
+
+
+                audioElement
+                  .play()
+                  .catch(
+                    (error) => {
+
+                      console.warn(
+                        "Audio autoplay blocked:",
+                        error
+                      );
+
+                    }
+                  );
+              }
             }
-          } catch (e) {
-            console.error("Payload error:", e);
-          }
-        });
+          );
 
-        currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
-          const el = document.getElementById("agent-audio-element");
-          if (el) el.remove();
-          callBtn.textContent = "📞 Call Support";
-          callBtn.classList.remove("connected");
+
+          /* -----------------------------------------
+             TRACK UNSUBSCRIBED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.TrackUnsubscribed,
+            (track) => {
+
+              console.log(
+                "Track unsubscribed."
+              );
+
+              track.detach();
+            }
+          );
+
+
+          /* -----------------------------------------
+             DATA RECEIVED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.DataReceived,
+            (
+              payload,
+              participant,
+              kind,
+              topic
+            ) => {
+
+              handleDataReceived(
+                payload
+              );
+            }
+          );
+
+
+          /* -----------------------------------------
+             PARTICIPANT CONNECTED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.ParticipantConnected,
+            (participant) => {
+
+              console.log(
+                "Participant connected:",
+                participant.identity
+              );
+
+              addMessage(
+                "System",
+                "AI agent connected."
+              );
+            }
+          );
+
+
+          /* -----------------------------------------
+             PARTICIPANT DISCONNECTED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.ParticipantDisconnected,
+            (participant) => {
+
+              console.log(
+                "Participant disconnected:",
+                participant.identity
+              );
+
+              addMessage(
+                "System",
+                "AI agent disconnected."
+              );
+            }
+          );
+
+
+          /* -----------------------------------------
+             CONNECTION STATE
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.ConnectionStateChanged,
+            (state) => {
+
+              console.log(
+                "Connection state:",
+                state
+              );
+            }
+          );
+
+
+          /* -----------------------------------------
+             ROOM DISCONNECTED
+          ------------------------------------------ */
+
+          currentRoom.on(
+            LivekitClient.RoomEvent.Disconnected,
+            handleDisconnect
+          );
+
+
+          /* -----------------------------------------
+             CONNECT TO LIVEKIT
+          ------------------------------------------ */
+
+          await currentRoom.connect(
+            LIVEKIT_URL,
+            data.token
+          );
+
+
+          console.log(
+            "Connected to LiveKit."
+          );
+
+
+          /* -----------------------------------------
+             ENABLE MICROPHONE
+          ------------------------------------------ */
+
+          await currentRoom.localParticipant
+            .setMicrophoneEnabled(true);
+
+
+          /* -----------------------------------------
+             UPDATE UI
+          ------------------------------------------ */
+
+          callBtn.textContent =
+            "❌ End Call";
+
+          callBtn.classList.add(
+            "connected"
+          );
+
           callBtn.disabled = false;
-          escalateBtn.style.display = "none";
-          statusPill.textContent = "Call disconnected";
-        });
 
-        await currentRoom.connect(LIVEKIT_URL, data.token);
-        await currentRoom.localParticipant.setMicrophoneEnabled(true);
 
-        callBtn.textContent = "❌ End Call";
-        callBtn.classList.add("connected");
-        callBtn.disabled = false;
-        escalateBtn.style.display = "block";
-        statusPill.textContent = "Agent connected (Sub-second response)";
-      } catch (err) {
-        console.error(err);
-        statusPill.textContent = "Connection failed. Please retry.";
-        callBtn.disabled = false;
+          escalateBtn.style.display =
+            "block";
+
+
+          statusPill.textContent =
+            "AI Agent Connected";
+
+
+          addMessage(
+            "System",
+            "Microphone connected. You can start speaking."
+          );
+
+        } catch (error) {
+
+          console.error(
+            "Connection error:",
+            error
+          );
+
+
+          if (
+            error.name ===
+            "AbortError"
+          ) {
+
+            statusPill.textContent =
+              "Token request timed out.";
+
+          } else {
+
+            statusPill.textContent =
+              "Connection failed. Please retry.";
+          }
+
+
+          callBtn.disabled = false;
+
+
+          if (currentRoom) {
+
+            try {
+              await currentRoom.disconnect();
+            } catch (e) {
+              console.error(e);
+            }
+
+            currentRoom = null;
+          }
+        }
       }
-    });
+    );
 
-    submitDetailsBtn.addEventListener("click", async () => {
-      const email = emailInput.value.trim();
-      const order = orderInput.value.trim();
 
-      if (!currentRoom || currentRoom.state !== "connected") {
-        alert("Please connect the call first.");
-        return;
+    /* =========================================================
+       SUBMIT ACCOUNT / ORDER DETAILS
+    ========================================================= */
+
+    submitDetailsBtn.addEventListener(
+      "click",
+      async () => {
+
+        const email =
+          emailInput.value.trim();
+
+        const order =
+          orderInput.value.trim();
+
+
+        /* -----------------------------------------
+           CHECK CONNECTION
+        ------------------------------------------ */
+
+        if (
+          !currentRoom ||
+          currentRoom.state !== "connected"
+        ) {
+
+          alert(
+            "Please connect the call first."
+          );
+
+          return;
+        }
+
+
+        /* -----------------------------------------
+           VALIDATE EMAIL
+        ------------------------------------------ */
+
+        if (
+          email &&
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+        ) {
+
+          alert(
+            "Please enter a valid email address."
+          );
+
+          return;
+        }
+
+
+        /* -----------------------------------------
+           CREATE PAYLOAD
+        ------------------------------------------ */
+
+        const payload =
+          JSON.stringify({
+
+            type:
+              "email_submission",
+
+            email:
+              email,
+
+            order_id:
+              order
+
+          });
+
+
+        try {
+
+          await currentRoom.localParticipant
+            .publishData(
+              new TextEncoder().encode(
+                payload
+              ),
+              {
+                reliable: true
+              }
+            );
+
+
+          statusPill.textContent =
+            "Details submitted to agent.";
+
+
+          addMessage(
+            "User",
+            "Submitted details: " +
+            (order || "N/A") +
+            " | " +
+            (email || "N/A")
+          );
+
+
+        } catch (error) {
+
+          console.error(
+            "Failed to send details:",
+            error
+          );
+
+
+          statusPill.textContent =
+            "Failed to submit details.";
+
+        }
       }
+    );
 
-      const payload = JSON.stringify({
-        type: "email_submission",
-        email: email,
-        order_id: order
-      });
 
-      await currentRoom.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
-      statusPill.textContent = "Details submitted.";
-      addMessage("User", "Submitted details: " + (order || "N/A") + " | " + (email || "N/A"));
-    });
+    /* =========================================================
+       HUMAN ESCALATION
+    ========================================================= */
 
-    escalateBtn.addEventListener("click", async () => {
-      if (!currentRoom || currentRoom.state !== "connected") return;
-      const payload = JSON.stringify({ type: "manual_escalate" });
-      await currentRoom.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
-      addMessage("User", "[Requested Human Escalation]");
-    });
+    escalateBtn.addEventListener(
+      "click",
+      async () => {
+
+        if (
+          !currentRoom ||
+          currentRoom.state !== "connected"
+        ) {
+
+          return;
+        }
+
+
+        const payload =
+          JSON.stringify({
+
+            type:
+              "manual_escalate"
+
+          });
+
+
+        try {
+
+          await currentRoom.localParticipant
+            .publishData(
+              new TextEncoder().encode(
+                payload
+              ),
+              {
+                reliable: true
+              }
+            );
+
+
+          addMessage(
+            "User",
+            "Requested human escalation."
+          );
+
+
+          statusPill.textContent =
+            "Human escalation requested.";
+
+
+        } catch (error) {
+
+          console.error(
+            "Escalation failed:",
+            error
+          );
+
+
+          statusPill.textContent =
+            "Failed to request escalation.";
+
+        }
+      }
+    );
+
+
+    /* =========================================================
+       PAGE LOAD
+    ========================================================= */
+
+    window.addEventListener(
+      "load",
+      () => {
+
+        console.log(
+          "Customer Support Desk loaded."
+        );
+
+
+        if (!checkLiveKit()) {
+          return;
+        }
+
+        console.log(
+          "Ready to connect."
+        );
+      }
+    );
+
   </script>
+
 </body>
 </html>
-  
