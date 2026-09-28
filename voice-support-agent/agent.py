@@ -266,6 +266,9 @@ async def entrypoint(ctx: JobContext):
             logging.error(f"Error handling room data: {err}")
 
     await session.start(ctx.room)
+    await session.generate_reply(
+        instructions="Politely greet the user in a smooth,respectful tone.Welcome them to support and ask what language they prefer."
+    )
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint,agent_name="",))
