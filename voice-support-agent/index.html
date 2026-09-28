@@ -10,7 +10,6 @@
       --bg: #0b1120;
       --card: #1e293b;
       --accent: #2563eb;
-      --accent-hover: #1d4ed8;
       --danger: #ef4444;
       --success: #10b981;
       --warning: #f59e0b;
@@ -62,7 +61,6 @@
       justify-content: center;
       align-items: center;
       gap: 8px;
-      transition: background 0.2s ease;
     }
     .btn-call { background: var(--accent); }
     .btn-call.connected { background: var(--danger); }
@@ -90,7 +88,7 @@
       background: #0f172a;
       border: 1px solid var(--border);
       border-radius: 10px;
-      height: 150px;
+      height: 140px;
       overflow-y: auto;
       padding: 10px;
       font-size: 0.82rem;
@@ -154,7 +152,7 @@
     const ticketResult = document.getElementById("ticketResult");
     const ticketNumberDisplay = document.getElementById("ticketNumberDisplay");
 
-    let room = null;
+    let currentRoom = null;
 
     function addMessage(sender, text) {
       if (transcript.children.length === 1 && transcript.children[0].tagName === "SPAN") {
@@ -165,11 +163,10 @@
       else if (sender === "User") item.className = "msg-user";
       else item.className = "msg-system";
 
-      item.innerHTML = <strong>${sender}:</strong> ${text};
+      item.innerHTML = "<strong>" + sender + ":</strong> " + text;
       transcript.appendChild(item);
       transcript.scrollTop = transcript.scrollHeight;
 
-      // Extract ticket ID from speech
       const match = text.match(/(TICK-[A-Z0-9]+)/i);
       if (match) {
         ticketResult.style.display = "block";
@@ -178,8 +175,8 @@
     }
 
     callBtn.addEventListener("click", async () => {
-      if (room && room.state === "connected") {
-        await room.disconnect();
+      if (currentRoom && currentRoom.state === "connected") {
+        await currentRoom.disconnect();
         return;
       }
 
@@ -188,62 +185,59 @@
         callBtn.disabled = true;
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000);
+        const timer = setTimeout(() => controller.abort(), 15000);
         const res = await fetch(TOKEN_ENDPOINT, { signal: controller.signal });
-        clearTimeout(timeout);
+        clearTimeout(timer);
 
-        if (!res.ok) throw new Error("Could not fetch token");
+        if (!res.ok) throw new Error("Token request failed");
         const data = await res.json();
 
-        room = new LivekitClient.Room({
+        currentRoom = new LivekitClient.Room({
           adaptiveStream: true,
-          dynacast: true,
+          dynacast: true
         });
 
-        // Mobile-friendly audio element attachment
-        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+        currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
           if (track.kind === "audio") {
             const el = track.attach();
-            el.id = "agent-audio";
-            el.autoplay = true;
+            el.id = "agent-audio-element";
             document.body.appendChild(el);
-            el.play().catch(e => console.warn("Waiting for browser audio unlock", e));
+            el.play().catch(e => console.warn("Audio autoplay blocked:", e));
           }
         });
 
-        // Live transcript ingestion
-        room.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
+        currentRoom.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
           try {
             const evt = JSON.parse(new TextDecoder().decode(payload));
             if (evt.type === "transcript") {
               addMessage(evt.sender, evt.text);
             }
           } catch (e) {
-            console.error("Data decode error:", e);
+            console.error("Payload error:", e);
           }
         });
 
-        room.on(LivekitClient.RoomEvent.Disconnected, () => {
-          const el = document.getElementById("agent-audio");
+        currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+          const el = document.getElementById("agent-audio-element");
           if (el) el.remove();
           callBtn.textContent = "📞 Call Support";
           callBtn.classList.remove("connected");
           callBtn.disabled = false;
           escalateBtn.style.display = "none";
-          statusPill.textContent = "Call completed";
+          statusPill.textContent = "Call disconnected";
         });
 
-        await room.connect(LIVEKIT_URL, data.token);
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await currentRoom.connect(LIVEKIT_URL, data.token);
+        await currentRoom.localParticipant.setMicrophoneEnabled(true);
 
         callBtn.textContent = "❌ End Call";
         callBtn.classList.add("connected");
         callBtn.disabled = false;
         escalateBtn.style.display = "block";
-        statusPill.textContent = "Agent active (Sub-second latency)";
+        statusPill.textContent = "Agent connected (Sub-second response)";
       } catch (err) {
         console.error(err);
-        statusPill.textContent = "Connection issue. Please tap Call again.";
+        statusPill.textContent = "Connection failed. Please retry.";
         callBtn.disabled = false;
       }
     });
@@ -252,8 +246,8 @@
       const email = emailInput.value.trim();
       const order = orderInput.value.trim();
 
-      if (!room || room.state !== "connected") {
-        alert("Please start the call first.");
+      if (!currentRoom || currentRoom.state !== "connected") {
+        alert("Please connect the call first.");
         return;
       }
 
@@ -263,16 +257,16 @@
         order_id: order
       });
 
-      await room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
-      statusPill.textContent = "Details submitted to active agent.";
-      addMessage("User", Submitted Order/Email: ${order || "N/A"} | ${email || "N/A"});
+      await currentRoom.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
+      statusPill.textContent = "Details submitted.";
+      addMessage("User", "Submitted details: " + (order || "N/A") + " | " + (email || "N/A"));
     });
 
     escalateBtn.addEventListener("click", async () => {
-      if (!room || room.state !== "connected") return;
+      if (!currentRoom || currentRoom.state !== "connected") return;
       const payload = JSON.stringify({ type: "manual_escalate" });
-      await room.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
-      addMessage("User", "[Requested Immediate Human Escalation]");
+      await currentRoom.localParticipant.publishData(new TextEncoder().encode(payload), { reliable: true });
+      addMessage("User", "[Requested Human Escalation]");
     });
   </script>
 </body>
