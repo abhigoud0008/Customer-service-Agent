@@ -16,8 +16,17 @@ from livekit.agents import (
     cli,
     llm,
 )
-from livekit.agents.voice import VoicePipelineAgent
-from livekit.plugins import google, silero
+
+# Robust import compatible with all 0.11 - 0.12+ builds
+try:
+    from livekit.agents.pipeline import VoicePipelineAgent
+except ImportError:
+    try:
+        from livekit.agents import VoicePipelineAgent
+    except ImportError:
+        from livekit.agents.voice import VoiceAgent as VoicePipelineAgent
+
+from livekit.plugins import google
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -144,7 +153,7 @@ def _sync_query_user_tickets(query_val: str) -> list:
     return results
 
 # ==========================================
-# 4. LLM Function Tools (FunctionContext)
+# 4. Tool Functions
 # ==========================================
 class SupportFunctionContext(llm.FunctionContext):
     @llm.ai_callable(description="Look up customer account or order details by order ID.")
@@ -188,20 +197,20 @@ async def entrypoint(ctx: JobContext):
     }
 
     instructions = (
-        "You are an empathetic, polite, and rapid customer service agent.\n"
-        "RESPONSE RULES:\n"
-        "- Deliver direct answers in 1 to 2 short sentences. Never give long explanations.\n"
-        "- Adapt instantly to whatever language the user selects (e.g. English, Hindi, Telugu, Spanish, etc.) and continue the entire conversation in that language.\n\n"
-        "WORKFLOW STEPS:\n"
-        "1. LANGUAGE SELECTION: The call starts with an opening greeting asking the user which language they prefer to speak. Wait for their response and acknowledge their chosen language immediately in that language.\n"
-        "2. CHECK EXISTING TICKETS: If the user asks how many tickets they have or asks about a past issue, ask for their name or email, call query_user_tickets, and clearly state the count and ticket IDs.\n"
-        "3. LOOK UP ORDER: If the user asks about an order, ask for the order ID, call lookup_order, and state the status.\n"
-        "4. CREATE NEW TICKET: If they report an issue, collect their name and problem description, call create_support_ticket, announce the ticket ID clearly, and tell them to enter their email in the web box for a confirmation receipt.\n"
-        "5. ESCALATION: If the user asks for a human supervisor, immediately call escalate_to_human."
+        "You are an empathetic, rapid customer service voice agent.\n"
+        "CORE RULES:\n"
+        "- Speak concisely in 1 to 2 short sentences. Do not ramble.\n"
+        "- Respond in whatever language the caller chooses (e.g. English, Telugu, Hindi, Spanish).\n\n"
+        "STEPS:\n"
+        "1. Start by asking what language the customer wants to speak in.\n"
+        "2. Once chosen, respond and continue exclusively in that language.\n"
+        "3. To check tickets: Ask for name or email and invoke 'query_user_tickets'.\n"
+        "4. For orders: Ask for order ID and invoke 'lookup_order'.\n"
+        "5. For complaints: Collect name and issue, call 'create_support_ticket', recite the ticket ID, and instruct them to enter their email in the web box for a receipt.\n"
+        "6. If requested: Call 'escalate_to_human'."
     )
 
     agent = VoicePipelineAgent(
-        vad=ctx.proc.userdata.get("vad"),
         stt=google.STT(),
         llm=google.LLM(model="gemini-2.0-flash-exp"),
         tts=google.TTS(voice_name="Aoede"),
@@ -217,7 +226,7 @@ async def entrypoint(ctx: JobContext):
             payload = json.dumps(data_dict).encode("utf-8")
             await ctx.room.local_participant.publish_data(payload, reliable=True)
         except Exception as e:
-            logging.warning(f"Data broadcast skipped: {e}")
+            logging.warning(f"Broadcast error: {e}")
 
     @agent.on("agent_speech_committed")
     def on_agent_speech(msg):
@@ -236,8 +245,6 @@ async def entrypoint(ctx: JobContext):
             if action == "email_submission":
                 email = payload.get("email", "").strip()
                 session_state["email"] = email
-                logging.info(f"Received customer email: {email}")
-
                 if session_state["last_ticket_id"]:
                     asyncio.create_task(
                         asyncio.to_thread(
@@ -255,23 +262,16 @@ async def entrypoint(ctx: JobContext):
                     "text": "Priority escalation requested by user."
                 }))
         except Exception as err:
-            logging.error(f"Error handling room data: {err}")
+            logging.error(f"Data error: {err}")
 
-    # Start the agent in the room
     agent.start(ctx.room)
 
-    # Spoken greeting asking for preferred language first
+    # Initial prompt asking for preferred language first
     await agent.say(
         "Welcome to customer support! Which language would you prefer to speak in today?",
         allow_interruptions=True,
     )
 
 if __name__ == "__main__":
-    cli.run_app(
-        WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            prewarm_fnc=lambda proc: proc.userdata.update({"vad": silero.VAD.load()}),
-            agent_name="",
-        )
-    )
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, agent_name=""))
     
