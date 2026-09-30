@@ -10,21 +10,22 @@
 
   <title>Customer Service Support Desk</title>
 
-  <!-- LiveKit browser client -->
+  <!-- LiveKit Browser Client -->
   <script
     src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js">
   </script>
 
   <style>
     :root {
-      --bg: #0b1120;
+      --background: #07101f;
       --card: #1e293b;
-      --accent: #2563eb;
+      --panel: #0f172a;
+      --primary: #2563eb;
       --danger: #ef4444;
       --success: #10b981;
       --warning: #f59e0b;
       --text: #f8fafc;
-      --text-muted: #94a3b8;
+      --muted: #94a3b8;
       --border: #334155;
     }
 
@@ -37,176 +38,209 @@
         BlinkMacSystemFont,
         "Segoe UI",
         Roboto,
+        Arial,
         sans-serif;
     }
 
     body {
-      background-color: var(--bg);
-      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
-      padding: 14px;
+      background: var(--background);
+      color: var(--text);
     }
 
     .desk-card {
-      background: var(--card);
       width: 100%;
-      max-width: 440px;
-      border-radius: 20px;
-      padding: 24px;
+      max-width: 460px;
+      padding: 26px;
+      background: var(--card);
       border: 1px solid var(--border);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+      border-radius: 24px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
     }
 
     h1 {
-      font-size: 1.45rem;
+      margin-bottom: 6px;
+      font-size: 1.6rem;
+      font-weight: 750;
       text-align: center;
-      margin-bottom: 4px;
-      font-weight: 700;
     }
 
     .subtitle {
+      margin-bottom: 22px;
+      color: var(--muted);
+      font-size: 0.95rem;
       text-align: center;
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      margin-bottom: 18px;
     }
 
     .status-pill {
-      text-align: center;
-      padding: 10px;
-      border-radius: 10px;
-      background: #0f172a;
-      font-size: 0.85rem;
-      margin-bottom: 16px;
-      color: #38bdf8;
-      border: 1px solid var(--border);
-    }
-
-    .btn {
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 12px;
-      font-size: 1rem;
-      font-weight: 600;
-      color: white;
-      cursor: pointer;
+      min-height: 48px;
+      margin-bottom: 18px;
+      padding: 13px;
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 8px;
+      color: #38bdf8;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 0.9rem;
+      text-align: center;
     }
 
-    .btn:disabled {
+    .button {
+      width: 100%;
+      min-height: 54px;
+      padding: 13px 16px;
+      border: none;
+      border-radius: 14px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .button:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
 
-    .btn-call {
-      background: var(--accent);
+    .call-button {
+      background: var(--primary);
     }
 
-    .btn-call.connected {
+    .call-button.connected {
       background: var(--danger);
     }
 
-    .btn-escalate {
+    .escalate-button {
+      margin-top: 10px;
       background: var(--warning);
-      margin-top: 8px;
-      font-size: 0.85rem;
-      padding: 10px;
     }
 
-    .ticket-result-box {
-      margin-top: 14px;
-      padding: 12px;
-      background: #1e3a8a;
-      border: 1px solid #3b82f6;
-      border-radius: 10px;
-      font-size: 0.85rem;
-      display: none;
-    }
-
-    .ticket-result-box strong {
-      color: #93c5fd;
+    .submit-button {
+      min-height: 48px;
+      background: var(--success);
+      font-size: 0.92rem;
     }
 
     .section-label {
       display: block;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 16px;
-      margin-bottom: 6px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 750;
       text-transform: uppercase;
-      font-weight: 700;
     }
 
     .transcript-window {
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      height: 180px;
-      overflow-y: auto;
-      padding: 10px;
-      font-size: 0.82rem;
+      height: 220px;
+      padding: 14px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      font-size: 0.87rem;
+      line-height: 1.5;
     }
 
-    .msg-agent {
+    .message-agent {
       color: #4ade80;
     }
 
-    .msg-user {
+    .message-user {
       color: #38bdf8;
     }
 
-    .msg-system {
+    .message-system {
       color: #f59e0b;
       font-style: italic;
     }
 
+    .ticket-result {
+      display: none;
+      margin-top: 16px;
+      padding: 13px;
+      background: #1e3a8a;
+      border: 1px solid #3b82f6;
+      border-radius: 12px;
+      font-size: 0.88rem;
+    }
+
+    .ticket-result strong {
+      color: #bfdbfe;
+    }
+
     input {
       width: 100%;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      background: #0f172a;
+      min-height: 50px;
+      margin-bottom: 10px;
+      padding: 12px 14px;
       color: var(--text);
-      font-size: 0.9rem;
-      margin-bottom: 8px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 11px;
       outline: none;
+      font-size: 0.95rem;
     }
 
     input:focus {
-      border-color: var(--accent);
+      border-color: var(--primary);
     }
 
-    .btn-submit {
-      background: var(--success);
-      font-size: 0.9rem;
-      padding: 10px;
+    input::placeholder {
+      color: #64748b;
     }
 
     .small-note {
+      margin-top: 15px;
+      color: var(--muted);
+      font-size: 0.72rem;
       text-align: center;
-      color: var(--text-muted);
-      font-size: 0.7rem;
-      margin-top: 12px;
     }
 
-    #remoteAudioContainer {
-      display: none;
+    #audioContainer {
+      position: fixed;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    @media (max-width: 500px) {
+      body {
+        padding: 12px;
+        align-items: flex-start;
+      }
+
+      .desk-card {
+        margin-top: 20px;
+        padding: 20px;
+        border-radius: 20px;
+      }
+
+      h1 {
+        font-size: 1.45rem;
+      }
+
+      .transcript-window {
+        height: 210px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div class="desk-card">
+  <main class="desk-card">
     <h1>Customer Support Desk</h1>
 
     <div class="subtitle">
@@ -216,20 +250,23 @@
     <div
       id="statusPill"
       class="status-pill"
+      aria-live="polite"
     >
       Ready to connect
     </div>
 
     <button
-      id="callBtn"
-      class="btn btn-call"
+      id="callButton"
+      class="button call-button"
+      type="button"
     >
       📞 Call Support
     </button>
 
     <button
-      id="escalateBtn"
-      class="btn btn-escalate"
+      id="escalateButton"
+      class="button escalate-button"
+      type="button"
       style="display: none;"
     >
       🚨 Escalate to Human
@@ -237,10 +274,11 @@
 
     <div
       id="ticketResult"
-      class="ticket-result-box"
+      class="ticket-result"
     >
       <strong>Active Ticket:</strong>
-      <span id="ticketNumberDisplay">
+
+      <span id="ticketNumber">
         None
       </span>
     </div>
@@ -252,10 +290,11 @@
     <div
       id="transcript"
       class="transcript-window"
+      aria-live="polite"
     >
       <span
         id="transcriptPlaceholder"
-        style="color: var(--text-muted);"
+        style="color: var(--muted);"
       >
         Conversation transcript will appear here in real time...
       </span>
@@ -266,22 +305,24 @@
     </span>
 
     <input
-      type="text"
       id="orderInput"
+      type="text"
       placeholder="Order ID or Account Name"
       autocomplete="off"
     >
 
     <input
-      type="email"
       id="emailInput"
+      type="email"
       placeholder="Email address for ticket receipt"
       autocomplete="email"
+      inputmode="email"
     >
 
     <button
-      id="submitDetailsBtn"
-      class="btn btn-submit"
+      id="submitButton"
+      class="button submit-button"
+      type="button"
     >
       Submit Details to Agent
     </button>
@@ -289,17 +330,29 @@
     <div class="small-note">
       Secure real-time AI support
     </div>
-  </div>
+  </main>
 
-  <div id="remoteAudioContainer"></div>
+  <!-- LiveKit attaches agent audio elements here -->
+  <div id="audioContainer"></div>
 
   <script>
     "use strict";
 
     /*
-     * =========================================================
+     * =====================================================
+     * BUILD IDENTIFIER
+     * =====================================================
+     */
+
+    console.log(
+      "Customer Support frontend build: mobile-audio-fix-7"
+    );
+
+
+    /*
+     * =====================================================
      * CONFIGURATION
-     * =========================================================
+     * =====================================================
      */
 
     const TOKEN_ENDPOINT =
@@ -310,79 +363,142 @@
 
 
     /*
-     * =========================================================
-     * DOM ELEMENTS
-     * =========================================================
+     * =====================================================
+     * DOM REFERENCES
+     * =====================================================
      */
 
-    const callBtn =
-      document.getElementById("callBtn");
+    const callButton =
+      document.getElementById(
+        "callButton"
+      );
 
-    const escalateBtn =
-      document.getElementById("escalateBtn");
+    const escalateButton =
+      document.getElementById(
+        "escalateButton"
+      );
+
+    const submitButton =
+      document.getElementById(
+        "submitButton"
+      );
 
     const statusPill =
-      document.getElementById("statusPill");
+      document.getElementById(
+        "statusPill"
+      );
 
     const transcript =
-      document.getElementById("transcript");
-
-    const initialTranscriptPlaceholder =
-      document.getElementById("transcriptPlaceholder");
-
-    const emailInput =
-      document.getElementById("emailInput");
+      document.getElementById(
+        "transcript"
+      );
 
     const orderInput =
-      document.getElementById("orderInput");
+      document.getElementById(
+        "orderInput"
+      );
 
-    const submitDetailsBtn =
-      document.getElementById("submitDetailsBtn");
+    const emailInput =
+      document.getElementById(
+        "emailInput"
+      );
 
     const ticketResult =
-      document.getElementById("ticketResult");
+      document.getElementById(
+        "ticketResult"
+      );
 
-    const ticketNumberDisplay =
-      document.getElementById("ticketNumberDisplay");
+    const ticketNumber =
+      document.getElementById(
+        "ticketNumber"
+      );
 
-    const remoteAudioContainer =
-      document.getElementById("remoteAudioContainer");
+    const audioContainer =
+      document.getElementById(
+        "audioContainer"
+      );
 
 
     /*
-     * =========================================================
+     * =====================================================
      * APPLICATION STATE
-     * =========================================================
+     * =====================================================
      */
 
     let currentRoom = null;
-    let connectingCall = false;
-    let microphoneRetryTimer = null;
+    let connectionInProgress = false;
+    let mobileAudioUnlocked = false;
 
 
     /*
-     * =========================================================
-     * GENERAL HELPERS
-     * =========================================================
+     * =====================================================
+     * BASIC HELPERS
+     * =====================================================
      */
 
-    function wait(milliseconds) {
-      return new Promise((resolve) => {
-        setTimeout(resolve, milliseconds);
+    function delay(milliseconds) {
+      return new Promise(
+        (resolve) => {
+          setTimeout(
+            resolve,
+            milliseconds
+          );
+        }
+      );
+    }
+
+
+    function withTimeout(
+      promise,
+      timeoutMilliseconds,
+      message
+    ) {
+      let timeoutId;
+
+      const timeoutPromise =
+        new Promise(
+          (resolve, reject) => {
+            timeoutId = setTimeout(
+              () => {
+                reject(
+                  new Error(message)
+                );
+              },
+              timeoutMilliseconds
+            );
+          }
+        );
+
+      return Promise.race([
+        promise,
+        timeoutPromise
+      ]).finally(() => {
+        clearTimeout(timeoutId);
       });
     }
 
 
-    function checkLiveKit() {
-      if (typeof LivekitClient === "undefined") {
+    function isConnected(room) {
+      return Boolean(
+        room &&
+        room.state === "connected"
+      );
+    }
+
+
+    function checkLiveKitLibrary() {
+      if (
+        typeof LivekitClient ===
+        "undefined"
+      ) {
         console.error(
-          "LiveKit Client library was not loaded."
+          "LiveKit Client library did not load."
         );
 
         statusPill.textContent =
-          "LiveKit library failed to load.";
+          "LiveKit library failed to load";
 
-        callBtn.disabled = true;
+        callButton.disabled = true;
 
         return false;
       }
@@ -395,33 +511,43 @@
     }
 
 
-    function isRoomConnected(room) {
-      if (!room) {
-        return false;
-      }
+    /*
+     * =====================================================
+     * UI HELPERS
+     * =====================================================
+     */
 
-      return (
-        room.state === "connected" ||
-        room.state ===
-          LivekitClient.ConnectionState?.Connected
-      );
-    }
+    function showConnectedInterface() {
+      callButton.textContent =
+        "❌ End Call";
 
-
-    function resetCallInterface() {
-      callBtn.textContent =
-        "📞 Call Support";
-
-      callBtn.classList.remove(
+      callButton.classList.add(
         "connected"
       );
 
-      callBtn.disabled = false;
+      callButton.disabled = false;
 
-      escalateBtn.style.display =
+      escalateButton.style.display =
+        "block";
+
+      escalateButton.disabled = false;
+    }
+
+
+    function resetInterface() {
+      callButton.textContent =
+        "📞 Call Support";
+
+      callButton.classList.remove(
+        "connected"
+      );
+
+      callButton.disabled = false;
+
+      escalateButton.style.display =
         "none";
 
-      escalateBtn.disabled = false;
+      escalateButton.disabled = false;
 
       statusPill.textContent =
         "Ready to connect";
@@ -429,12 +555,15 @@
 
 
     /*
-     * =========================================================
+     * =====================================================
      * TRANSCRIPT
-     * =========================================================
+     * =====================================================
      */
 
-    function addMessage(sender, text) {
+    function addMessage(
+      sender,
+      text
+    ) {
       if (!text) {
         return;
       }
@@ -448,37 +577,48 @@
         placeholder.remove();
       }
 
-      const item =
-        document.createElement("div");
+      const message =
+        document.createElement(
+          "div"
+        );
 
       if (sender === "Agent") {
-        item.className = "msg-agent";
-      } else if (sender === "User") {
-        item.className = "msg-user";
+        message.className =
+          "message-agent";
+      } else if (
+        sender === "User"
+      ) {
+        message.className =
+          "message-user";
       } else {
-        item.className = "msg-system";
+        message.className =
+          "message-system";
       }
 
-      const senderElement =
-        document.createElement("strong");
+      const senderLabel =
+        document.createElement(
+          "strong"
+        );
 
-      senderElement.textContent =
+      senderLabel.textContent =
         sender + ":";
 
-      const messageElement =
+      const messageText =
         document.createTextNode(
           " " + text
         );
 
-      item.appendChild(
-        senderElement
+      message.appendChild(
+        senderLabel
       );
 
-      item.appendChild(
-        messageElement
+      message.appendChild(
+        messageText
       );
 
-      transcript.appendChild(item);
+      transcript.appendChild(
+        message
+      );
 
       transcript.scrollTop =
         transcript.scrollHeight;
@@ -492,19 +632,19 @@
         ticketResult.style.display =
           "block";
 
-        ticketNumberDisplay.textContent =
+        ticketNumber.textContent =
           ticketMatch[0].toUpperCase();
       }
     }
 
 
     /*
-     * =========================================================
-     * LIVEKIT DATA
-     * =========================================================
+     * =====================================================
+     * DATA RECEIVED FROM AGENT
+     * =====================================================
      */
 
-    function handleDataReceived(payload) {
+    function processAgentData(payload) {
       try {
         const decodedPayload =
           new TextDecoder().decode(
@@ -512,12 +652,14 @@
           );
 
         console.log(
-          "LiveKit data received:",
+          "Agent data received:",
           decodedPayload
         );
 
         const event =
-          JSON.parse(decodedPayload);
+          JSON.parse(
+            decodedPayload
+          );
 
         if (
           event.type ===
@@ -526,30 +668,6 @@
           addMessage(
             event.sender || "Agent",
             event.text || ""
-          );
-
-          return;
-        }
-
-        if (
-          event.type ===
-          "ticket_created"
-        ) {
-          if (event.ticket_id) {
-            ticketResult.style.display =
-              "block";
-
-            ticketNumberDisplay.textContent =
-              event.ticket_id;
-          }
-
-          addMessage(
-            "System",
-            "Ticket created: " +
-              (
-                event.ticket_id ||
-                "Unknown"
-              )
           );
 
           return;
@@ -568,10 +686,34 @@
             statusPill.textContent =
               statusMessage;
           }
+
+          return;
+        }
+
+        if (
+          event.type ===
+          "ticket_created"
+        ) {
+          if (event.ticket_id) {
+            ticketResult.style.display =
+              "block";
+
+            ticketNumber.textContent =
+              event.ticket_id;
+          }
+
+          addMessage(
+            "System",
+            "Ticket created: " +
+              (
+                event.ticket_id ||
+                "Unknown"
+              )
+          );
         }
       } catch (error) {
         console.error(
-          "Data payload parsing error:",
+          "Agent data parsing failed:",
           error
         );
       }
@@ -579,14 +721,68 @@
 
 
     /*
-     * =========================================================
-     * AUDIO CLEANUP
-     * =========================================================
+     * =====================================================
+     * MOBILE AUDIO
+     * =====================================================
      */
+
+    async function unlockMobileAudio() {
+      if (!currentRoom) {
+        return;
+      }
+
+      try {
+        await currentRoom.startAudio();
+
+        mobileAudioUnlocked =
+          true;
+
+        const audioElements =
+          audioContainer.querySelectorAll(
+            "audio"
+          );
+
+        for (
+          const audioElement
+          of audioElements
+        ) {
+          audioElement.autoplay =
+            true;
+
+          audioElement.playsInline =
+            true;
+
+          audioElement.muted =
+            false;
+
+          audioElement.volume =
+            1;
+
+          try {
+            await audioElement.play();
+          } catch (playError) {
+            console.warn(
+              "Audio element did not resume:",
+              playError
+            );
+          }
+        }
+
+        console.log(
+          "Mobile audio playback unlocked."
+        );
+      } catch (error) {
+        console.warn(
+          "Mobile audio unlock warning:",
+          error
+        );
+      }
+    }
+
 
     function removeAgentAudio() {
       const audioElements =
-        remoteAudioContainer.querySelectorAll(
+        audioContainer.querySelectorAll(
           "audio"
         );
 
@@ -604,218 +800,29 @@
           audioElement.remove();
         }
       );
+
+      mobileAudioUnlocked =
+        false;
     }
 
 
     /*
-     * =========================================================
-     * ROOM CONNECTION WAIT
-     * =========================================================
-     */
-
-    async function waitForConnectedRoom(
-      room,
-      timeoutMilliseconds = 15000
-    ) {
-      if (isRoomConnected(room)) {
-        return;
-      }
-
-      await new Promise(
-        (resolve, reject) => {
-          let completed = false;
-
-          const timeoutId =
-            setTimeout(() => {
-              if (completed) {
-                return;
-              }
-
-              completed = true;
-              cleanup();
-
-              reject(
-                new Error(
-                  "LiveKit connection timed out."
-                )
-              );
-            }, timeoutMilliseconds);
-
-          function cleanup() {
-            clearTimeout(timeoutId);
-
-            room.off(
-              LivekitClient.RoomEvent
-                .ConnectionStateChanged,
-              handleState
-            );
-
-            room.off(
-              LivekitClient.RoomEvent
-                .Disconnected,
-              handleDisconnected
-            );
-          }
-
-          function handleState(state) {
-            if (
-              state === "connected" ||
-              state ===
-                LivekitClient
-                  .ConnectionState
-                  ?.Connected
-            ) {
-              if (completed) {
-                return;
-              }
-
-              completed = true;
-              cleanup();
-              resolve();
-            }
-          }
-
-          function handleDisconnected() {
-            if (completed) {
-              return;
-            }
-
-            completed = true;
-            cleanup();
-
-            reject(
-              new Error(
-                "LiveKit disconnected while connecting."
-              )
-            );
-          }
-
-          room.on(
-            LivekitClient.RoomEvent
-              .ConnectionStateChanged,
-            handleState
-          );
-
-          room.on(
-            LivekitClient.RoomEvent
-              .Disconnected,
-            handleDisconnected
-          );
-        }
-      );
-    }
-
-
-    /*
-     * =========================================================
-     * MICROPHONE
-     * =========================================================
-     */
-
-    async function enableMicrophoneWithRetry(
-      room,
-      maximumAttempts = 3
-    ) {
-      let lastError = null;
-
-      for (
-        let attempt = 1;
-        attempt <= maximumAttempts;
-        attempt += 1
-      ) {
-        try {
-          if (!isRoomConnected(room)) {
-            await waitForConnectedRoom(
-              room,
-              15000
-            );
-          }
-
-          /*
-           * Wait for the publishing transport to initialize.
-           */
-          await wait(
-            attempt === 1
-              ? 1800
-              : 3000
-          );
-
-          console.log(
-            "Microphone publish attempt:",
-            attempt
-          );
-
-          await room.localParticipant
-            .setMicrophoneEnabled(true);
-
-          console.log(
-            "Microphone published successfully."
-          );
-
-          statusPill.textContent =
-            "AI Agent Connected";
-
-          addMessage(
-            "System",
-            "Microphone connected. You can start speaking."
-          );
-
-          return true;
-        } catch (error) {
-          lastError = error;
-
-          console.warn(
-            `Microphone attempt ${attempt} failed:`,
-            error
-          );
-
-          if (
-            attempt <
-            maximumAttempts
-          ) {
-            statusPill.textContent =
-              "Retrying microphone connection...";
-
-            await wait(2000);
-          }
-        }
-      }
-
-      console.error(
-        "Microphone publication failed:",
-        lastError
-      );
-
-      statusPill.textContent =
-        "Connected, microphone unavailable";
-
-      addMessage(
-        "System",
-        "The room is connected, but the microphone could not be published. Check microphone permission or try another network."
-      );
-
-      /*
-       * Do not disconnect the room.
-       * The customer can still receive agent audio.
-       */
-      return false;
-    }
-
-
-    /*
-     * =========================================================
+     * =====================================================
      * TOKEN REQUEST
-     * =========================================================
+     * =====================================================
      */
 
-    async function fetchLiveKitToken() {
+    async function requestToken() {
       const controller =
         new AbortController();
 
       const timeoutId =
-        setTimeout(() => {
-          controller.abort();
-        }, 20000);
+        setTimeout(
+          () => {
+            controller.abort();
+          },
+          20000
+        );
 
       try {
         const response =
@@ -835,7 +842,7 @@
 
         if (!response.ok) {
           throw new Error(
-            "Token request failed. HTTP " +
+            "Token server returned HTTP " +
               response.status
           );
         }
@@ -845,28 +852,143 @@
 
         if (!data.token) {
           throw new Error(
-            "Token missing from server response."
+            "The token response was invalid."
           );
         }
 
         console.log(
-          "Token response received."
+          "Token received.",
+          {
+            room: data.room,
+            participant:
+              data.participant
+          }
         );
 
         return data;
       } finally {
-        clearTimeout(timeoutId);
+        clearTimeout(
+          timeoutId
+        );
       }
     }
 
 
     /*
-     * =========================================================
-     * ROOM EVENT LISTENERS
-     * =========================================================
+     * =====================================================
+     * MICROPHONE
+     * =====================================================
      */
 
-    function attachRoomListeners(room) {
+    async function testMicrophonePermission() {
+      if (
+        !navigator.mediaDevices ||
+        !navigator.mediaDevices
+          .getUserMedia
+      ) {
+        throw new Error(
+          "Microphone access is unavailable in this browser."
+        );
+      }
+
+      const stream =
+        await navigator.mediaDevices
+          .getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            },
+            video: false
+          });
+
+      stream
+        .getTracks()
+        .forEach(
+          (track) => {
+            track.stop();
+          }
+        );
+
+      console.log(
+        "Microphone permission confirmed."
+      );
+    }
+
+
+    async function publishMicrophone(
+      room
+    ) {
+      try {
+        await testMicrophonePermission();
+
+        if (
+          currentRoom !== room ||
+          !isConnected(room)
+        ) {
+          return false;
+        }
+
+        /*
+         * Give the LiveKit publishing transport time
+         * to initialize before publishing the track.
+         */
+        await delay(1800);
+
+        await withTimeout(
+          room.localParticipant
+            .setMicrophoneEnabled(
+              true
+            ),
+          25000,
+          "Microphone publishing timed out."
+        );
+
+        console.log(
+          "Microphone published successfully."
+        );
+
+        statusPill.textContent =
+          "AI Agent Connected";
+
+        addMessage(
+          "System",
+          "Microphone connected. You can start speaking."
+        );
+
+        return true;
+      } catch (error) {
+        console.error(
+          "Microphone publishing failed:",
+          error
+        );
+
+        statusPill.textContent =
+          "Connected, microphone unavailable";
+
+        addMessage(
+          "System",
+          "The room is connected, but microphone access failed. Check browser permission and reconnect."
+        );
+
+        /*
+         * Do not disconnect the room.
+         * The customer can still hear the agent.
+         */
+        return false;
+      }
+    }
+
+
+    /*
+     * =====================================================
+     * ROOM EVENT LISTENERS
+     * =====================================================
+     */
+
+    function attachRoomListeners(
+      room
+    ) {
       room.on(
         LivekitClient.RoomEvent
           .ConnectionStateChanged,
@@ -877,22 +999,22 @@
           );
 
           if (
-            state === "connecting"
+            currentRoom !== room
           ) {
-            statusPill.textContent =
-              "Connecting...";
+            return;
           }
 
-          if (
-            state === "connected"
-          ) {
+          if (state === "connecting") {
             statusPill.textContent =
-              "AI Agent Connected";
+              "Connecting to AI agent...";
           }
 
-          if (
-            state === "reconnecting"
-          ) {
+          if (state === "connected") {
+            statusPill.textContent =
+              "Waiting for AI agent...";
+          }
+
+          if (state === "reconnecting") {
             statusPill.textContent =
               "Reconnecting...";
           }
@@ -903,16 +1025,31 @@
       room.on(
         LivekitClient.RoomEvent
           .ParticipantConnected,
-        (participant) => {
+        async (participant) => {
           console.log(
             "Participant connected:",
             participant.identity
           );
 
+          if (
+            currentRoom !== room
+          ) {
+            return;
+          }
+
+          statusPill.textContent =
+            "AI Agent Connected";
+
           addMessage(
             "System",
             "AI agent joined the support room."
           );
+
+          /*
+           * Mobile browsers sometimes need another
+           * attempt after the agent joins.
+           */
+          await unlockMobileAudio();
         }
       );
 
@@ -925,6 +1062,15 @@
             "Participant disconnected:",
             participant.identity
           );
+
+          if (
+            currentRoom !== room
+          ) {
+            return;
+          }
+
+          statusPill.textContent =
+            "Waiting for AI agent...";
 
           addMessage(
             "System",
@@ -949,54 +1095,84 @@
           );
 
           if (
-  track.kind ===
-  LivekitClient.Track.Kind.Audio
-) {
-  const audioElement =
-    track.attach();
+            track.kind !==
+            LivekitClient.Track.Kind.Audio
+          ) {
+            return;
+          }
 
-  audioElement.autoplay = true;
-  audioElement.playsInline = true;
-  audioElement.muted = false;
-  audioElement.volume = 1;
+          const audioElement =
+            track.attach();
 
-  remoteAudioContainer.appendChild(
-    audioElement
-  );
+          audioElement.autoplay =
+            true;
 
-  try {
-    await currentRoom.startAudio();
-    await audioElement.play();
+          audioElement.playsInline =
+            true;
 
-    console.log(
-      "Agent audio playback started."
-    );
+          audioElement.muted =
+            false;
 
-  } catch (error) {
-    console.warn(
-      "Mobile browser blocked agent audio:",
-      error
-    );
+          audioElement.volume =
+            1;
 
-    statusPill.textContent =
-      "Tap the screen to enable audio";
+          audioElement.setAttribute(
+            "playsinline",
+            ""
+          );
 
-    addMessage(
-      "System",
-      "Tap anywhere on the screen to enable agent audio."
-    );
-  }
-}
+          audioElement.setAttribute(
+            "webkit-playsinline",
+            ""
+          );
+
+          audioContainer.appendChild(
+            audioElement
+          );
+
+          try {
+            await room.startAudio();
+
+            await audioElement.play();
+
+            mobileAudioUnlocked =
+              true;
+
+            console.log(
+              "Agent audio playback started."
+            );
+
+            statusPill.textContent =
+              "AI Agent Connected";
+          } catch (error) {
+            console.warn(
+              "Mobile browser blocked agent audio:",
+              error
+            );
+
+            mobileAudioUnlocked =
+              false;
+
+            statusPill.textContent =
+              "Tap the screen to enable audio";
+
+            addMessage(
+              "System",
+              "Tap anywhere on the screen to enable the agent audio."
+            );
+          }
+        }
+      );
+
 
       room.on(
         LivekitClient.RoomEvent
           .TrackUnsubscribed,
         (track) => {
-          console.log(
-            "Track unsubscribed."
-          );
+          const detachedElements =
+            track.detach();
 
-          track.detach().forEach(
+          detachedElements.forEach(
             (element) => {
               element.remove();
             }
@@ -1009,7 +1185,9 @@
         LivekitClient.RoomEvent
           .DataReceived,
         (payload) => {
-          handleDataReceived(payload);
+          processAgentData(
+            payload
+          );
         }
       );
 
@@ -1023,12 +1201,18 @@
             error
           );
 
+          if (
+            currentRoom !== room
+          ) {
+            return;
+          }
+
           statusPill.textContent =
             "Microphone permission failed";
 
           addMessage(
             "System",
-            "The browser could not access the microphone. Allow microphone permission and retry."
+            "The browser could not access the microphone. Allow microphone access and reconnect."
           );
         }
       );
@@ -1039,23 +1223,19 @@
           .Reconnected,
         async () => {
           console.log(
-            "LiveKit room reconnected."
+            "Room reconnected."
           );
+
+          if (
+            currentRoom !== room
+          ) {
+            return;
+          }
 
           statusPill.textContent =
             "AI Agent Connected";
 
-          await wait(1500);
-
-          try {
-            await room.localParticipant
-              .setMicrophoneEnabled(true);
-          } catch (error) {
-            console.warn(
-              "Microphone restore failed:",
-              error
-            );
-          }
+          await unlockMobileAudio();
         }
       );
 
@@ -1069,86 +1249,70 @@
             reason
           );
 
-          removeAgentAudio();
-
           if (
-            microphoneRetryTimer
+            currentRoom !== room
           ) {
-            clearTimeout(
-              microphoneRetryTimer
-            );
-
-            microphoneRetryTimer =
-              null;
+            return;
           }
 
           currentRoom = null;
 
-          resetCallInterface();
+          removeAgentAudio();
+
+          resetInterface();
         }
       );
     }
 
 
     /*
-     * =========================================================
-     * CREATE ROOM
-     * =========================================================
+     * =====================================================
+     * ROOM CREATION
+     * =====================================================
      */
 
-    function createLiveKitRoom() {
+    function createRoom() {
       const room =
         new LivekitClient.Room({
           adaptiveStream: true,
           dynacast: true,
-          disconnectOnPageLeave: true,
-
-          /*
-           * TURN relay mode is more reliable on restricted
-           * office networks, VPNs, and filtered Wi-Fi.
-           */
-          rtcConfig: {
-            iceTransportPolicy: "relay"
-          }
+          disconnectOnPageLeave: true
         });
 
-      attachRoomListeners(room);
+      attachRoomListeners(
+        room
+      );
 
       return room;
     }
 
 
     /*
-     * =========================================================
+     * =====================================================
      * DISCONNECT
-     * =========================================================
+     * =====================================================
      */
 
-    async function disconnectCurrentRoom() {
-      if (
-        microphoneRetryTimer
-      ) {
-        clearTimeout(
-          microphoneRetryTimer
-        );
-
-        microphoneRetryTimer =
-          null;
-      }
-
-      if (!currentRoom) {
-        return;
-      }
-
-      const roomToDisconnect =
+    async function disconnectRoom() {
+      const room =
         currentRoom;
 
       currentRoom = null;
 
+      if (!room) {
+        removeAgentAudio();
+        return;
+      }
+
       try {
-        await roomToDisconnect
-          .localParticipant
-          .setMicrophoneEnabled(false);
+        if (
+          room.state === "connected"
+        ) {
+          await room.localParticipant
+            .setMicrophoneEnabled(
+              false
+            );
+        }
       } catch (error) {
         console.warn(
           "Microphone shutdown warning:",
@@ -1157,8 +1321,7 @@
       }
 
       try {
-        await roomToDisconnect
-          .disconnect();
+        await room.disconnect();
       } catch (error) {
         console.warn(
           "Room disconnect warning:",
@@ -1171,27 +1334,25 @@
 
 
     /*
-     * =========================================================
-     * CALL SUPPORT
-     * =========================================================
+     * =====================================================
+     * START OR END CALL
+     * =====================================================
      */
 
-    callBtn.addEventListener(
+    callButton.addEventListener(
       "click",
       async () => {
         /*
-         * End an active call.
+         * The button click is a valid mobile user gesture.
+         * Use the gesture to prepare audio playback.
          */
-        if (
-          currentRoom &&
-          isRoomConnected(currentRoom)
-        ) {
+        if (currentRoom) {
           statusPill.textContent =
             "Ending call...";
 
-          await disconnectCurrentRoom();
+          await disconnectRoom();
 
-          resetCallInterface();
+          resetInterface();
 
           addMessage(
             "System",
@@ -1201,91 +1362,82 @@
           return;
         }
 
-        if (connectingCall) {
+        if (connectionInProgress) {
           return;
         }
 
-        if (!checkLiveKit()) {
+        if (!checkLiveKitLibrary()) {
           return;
         }
 
-        connectingCall = true;
-        callBtn.disabled = true;
+        connectionInProgress =
+          true;
+
+        callButton.disabled =
+          true;
 
         statusPill.textContent =
           "Requesting secure access...";
 
-        try {
-          /*
-           * Remove any incomplete previous connection.
-           */
-          await disconnectCurrentRoom();
+        let room = null;
 
+        try {
           const tokenData =
-            await fetchLiveKitToken();
+            await requestToken();
+
+          room =
+            createRoom();
 
           currentRoom =
-            createLiveKitRoom();
+            room;
 
           statusPill.textContent =
-            "Connecting to support...";
+            "Connecting to AI agent...";
 
-          /*
-           * This call was missing in the previous file.
-           */
-          await currentRoom.connect(
-            LIVEKIT_URL,
-            tokenData.token,
+          await withTimeout(
+            room.connect(
+              LIVEKIT_URL,
+              tokenData.token,
+              {
+                autoSubscribe: true
+              }
+            ),
+            25000,
+            "LiveKit connection timed out."
+          );
+
+          if (
+            currentRoom !== room
+          ) {
+            await room.disconnect();
+            return;
+          }
+
+          console.log(
+            "Connected to LiveKit.",
             {
-              autoSubscribe: true
+              room:
+                room.name,
+              state:
+                room.state,
+              participant:
+                room.localParticipant
+                  .identity
             }
           );
 
-          await waitForConnectedRoom(
-            currentRoom,
-            15000
-          );
+          showConnectedInterface();
 
-          console.log(
-            "Connected to LiveKit."
-          );
-
-          /*
-           * Start remote agent audio before publishing
-           * the microphone.
-           */
-          try {
-            await currentRoom.startAudio();
-
-            console.log(
-              "LiveKit audio playback enabled."
-            );
-          } catch (error) {
-            console.warn(
-              "Audio playback start warning:",
-              error
-            );
+          if (
+            room.remoteParticipants
+              .size > 0
+          ) {
+            statusPill.textContent =
+              "AI Agent Connected";
+          } else {
+            statusPill.textContent =
+              "Waiting for AI agent...";
           }
-
-          /*
-           * Mark the room connected before microphone
-           * publishing. A microphone error must not end
-           * the entire call.
-           */
-          callBtn.textContent =
-            "❌ End Call";
-
-          callBtn.classList.add(
-            "connected"
-          );
-
-          callBtn.disabled = false;
-
-          escalateBtn.style.display =
-            "flex";
-
-          statusPill.textContent =
-            "AI Agent Connected";
 
           addMessage(
             "System",
@@ -1293,43 +1445,53 @@
           );
 
           /*
-           * Enable the microphone separately.
+           * Start incoming audio while still inside
+           * the original mobile button gesture.
            */
-          const microphoneEnabled =
-            await enableMicrophoneWithRetry(
-              currentRoom,
-              3
-            );
+          try {
+            await room.startAudio();
 
-          if (
-            !microphoneEnabled &&
-            currentRoom
-          ) {
-            /*
-             * One delayed retry while the room remains
-             * connected.
-             */
-            microphoneRetryTimer =
-              setTimeout(
-                async () => {
-                  if (
-                    currentRoom &&
-                    isRoomConnected(
-                      currentRoom
-                    )
-                  ) {
-                    await enableMicrophoneWithRetry(
-                      currentRoom,
-                      1
-                    );
-                  }
-                },
-                6000
-              );
+            mobileAudioUnlocked =
+              true;
+
+            console.log(
+              "LiveKit audio playback enabled."
+            );
+          } catch (audioError) {
+            mobileAudioUnlocked =
+              false;
+
+            console.warn(
+              "Initial mobile audio warning:",
+              audioError
+            );
           }
+
+          /*
+           * Check participants already present before
+           * ParticipantConnected listener ran.
+           */
+          room.remoteParticipants.forEach(
+            (participant) => {
+              console.log(
+                "Existing remote participant:",
+                participant.identity
+              );
+            }
+          );
+
+          await publishMicrophone(
+            room
+          );
+
+          /*
+           * Retry audio after microphone permission.
+           */
+          await unlockMobileAudio();
+
         } catch (error) {
           console.error(
-            "Connection error:",
+            "Call connection failed:",
             error
           );
 
@@ -1341,27 +1503,56 @@
               "Token request timed out.";
           } else {
             statusPill.textContent =
+              error.message ||
               "Connection failed. Please retry.";
           }
 
           addMessage(
             "System",
-            "Connection failed. Please retry."
+            statusPill.textContent
           );
 
-          await disconnectCurrentRoom();
-
-          resetCallInterface();
-        } finally {
-          connectingCall = false;
-
           if (
-            !currentRoom ||
-            !isRoomConnected(
-              currentRoom
-            )
+            currentRoom === room
           ) {
-            callBtn.disabled = false;
+            currentRoom = null;
+          }
+
+          if (room) {
+            try {
+              await room.disconnect();
+            } catch (
+              disconnectError
+            ) {
+              console.warn(
+                "Disconnect warning:",
+                disconnectError
+              );
+            }
+          }
+
+          removeAgentAudio();
+
+          callButton.textContent =
+            "📞 Call Support";
+
+          callButton.classList.remove(
+            "connected"
+          );
+
+          callButton.disabled =
+            false;
+
+          escalateButton.style.display =
+            "none";
+
+        } finally {
+          connectionInProgress =
+            false;
+
+          if (!currentRoom) {
+            callButton.disabled =
+              false;
           }
         }
       }
@@ -1369,25 +1560,23 @@
 
 
     /*
-     * =========================================================
-     * SUBMIT CUSTOMER DETAILS
-     * =========================================================
+     * =====================================================
+     * SUBMIT ACCOUNT DETAILS
+     * =====================================================
      */
 
-    submitDetailsBtn.addEventListener(
+    submitButton.addEventListener(
       "click",
       async () => {
         const email =
           emailInput.value.trim();
 
-        const order =
+        const orderId =
           orderInput.value.trim();
 
         if (
           !currentRoom ||
-          !isRoomConnected(
-            currentRoom
-          )
+          !isConnected(currentRoom)
         ) {
           alert(
             "Please connect the call first."
@@ -1398,9 +1587,8 @@
 
         if (
           email &&
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
-            email
-          )
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/
+            .test(email)
         ) {
           alert(
             "Please enter a valid email address."
@@ -1411,7 +1599,7 @@
 
         if (
           !email &&
-          !order
+          !orderId
         ) {
           alert(
             "Enter an order ID, account name, or email."
@@ -1427,7 +1615,7 @@
             email:
               email,
             order_id:
-              order
+              orderId
           });
 
         try {
@@ -1443,7 +1631,7 @@
             );
 
           statusPill.textContent =
-            "Details submitted to agent.";
+            "Details submitted to agent";
 
           addMessage(
             "System",
@@ -1451,12 +1639,12 @@
           );
         } catch (error) {
           console.error(
-            "Failed to send details:",
+            "Details submission failed:",
             error
           );
 
           statusPill.textContent =
-            "Failed to submit details.";
+            "Details submission failed";
 
           addMessage(
             "System",
@@ -1468,19 +1656,17 @@
 
 
     /*
-     * =========================================================
-     * HUMAN ESCALATION
-     * =========================================================
+     * =====================================================
+     * ESCALATION
+     * =====================================================
      */
 
-    escalateBtn.addEventListener(
+    escalateButton.addEventListener(
       "click",
       async () => {
         if (
           !currentRoom ||
-          !isRoomConnected(
-            currentRoom
-          )
+          !isConnected(currentRoom)
         ) {
           addMessage(
             "System",
@@ -1510,25 +1696,25 @@
               }
             );
 
-          addMessage(
-            "System",
-            "Your escalation request is being registered."
-          );
+          escalateButton.disabled =
+            true;
 
           statusPill.textContent =
             "Escalation requested";
 
-          escalateBtn.disabled =
-            true;
+          addMessage(
+            "System",
+            "Your escalation request is being registered."
+          );
         } catch (error) {
           console.error(
-            "Escalation error:",
+            "Escalation request failed:",
             error
           );
 
           addMessage(
             "System",
-            "The escalation request could not be sent."
+            "The escalation request could not be submitted."
           );
         }
       }
@@ -1536,9 +1722,58 @@
 
 
     /*
-     * =========================================================
+     * =====================================================
+     * MOBILE AUDIO RESUME EVENTS
+     * =====================================================
+     */
+
+    document.addEventListener(
+      "touchstart",
+      () => {
+        if (
+          currentRoom &&
+          !mobileAudioUnlocked
+        ) {
+          unlockMobileAudio();
+        }
+      },
+      {
+        passive: true
+      }
+    );
+
+
+    document.addEventListener(
+      "click",
+      () => {
+        if (
+          currentRoom &&
+          !mobileAudioUnlocked
+        ) {
+          unlockMobileAudio();
+        }
+      }
+    );
+
+
+    document.addEventListener(
+      "visibilitychange",
+      async () => {
+        if (
+          document.visibilityState ===
+            "visible" &&
+          currentRoom
+        ) {
+          await unlockMobileAudio();
+        }
+      }
+    );
+
+
+    /*
+     * =====================================================
      * PAGE CLEANUP
-     * =========================================================
+     * =====================================================
      */
 
     window.addEventListener(
@@ -1549,68 +1784,12 @@
         }
       }
     );
-    async function resumeMobileAudio() {
-  if (!currentRoom) {
-    return;
-  }
-
-  try {
-    await currentRoom.startAudio();
-
-    const audioElements =
-      document.querySelectorAll(
-        "#remoteAudioContainer audio"
-      );
-
-    for (
-      const audioElement of audioElements
-    ) {
-      audioElement.muted = false;
-      audioElement.volume = 1;
-      audioElement.playsInline = true;
-
-      try {
-        await audioElement.play();
-      } catch (error) {
-        console.warn(
-          "Mobile audio element could not resume:",
-          error
-        );
-      }
-    }
-
-    console.log(
-      "Mobile agent audio resumed."
-    );
-
-  } catch (error) {
-    console.warn(
-      "LiveKit audio could not resume:",
-      error
-    );
-  }
-}
-
-
-document.addEventListener(
-  "click",
-  resumeMobileAudio
-);
-
-
-document.addEventListener(
-  "touchstart",
-  resumeMobileAudio,
-  {
-    passive: true
-  }
-);
 
 
     /*
-     * =========================================================
-     * PAGE LOAD
-     * =========================================================
+     * =====================================================
+     * PAGE STARTUP
+     * =====================================================
      */
 
     window.addEventListener(
@@ -1620,7 +1799,7 @@ document.addEventListener(
           "Customer Support Desk loaded."
         );
 
-        if (!checkLiveKit()) {
+        if (!checkLiveKitLibrary()) {
           return;
         }
 
