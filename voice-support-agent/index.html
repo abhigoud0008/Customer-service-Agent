@@ -865,19 +865,64 @@
           ------------------------------------------ */
 
           currentRoom.on(
-            LivekitClient.RoomEvent.Disconnected,
-            handleDisconnect
-          );
+  LivekitClient.RoomEvent.TrackSubscribed,
+  async (track, publication, participant) => {
+    console.log(
+      "Track subscribed:",
+      track.kind,
+      participant.identity
+    );
+
+    if (
+      track.kind ===
+      LivekitClient.Track.Kind.Audio
+    ) {
+      const audioElement = track.attach();
+
+      audioElement.autoplay = true;
+      audioElement.playsInline = true;
+      audioElement.volume = 1;
+
+      document.body.appendChild(
+        audioElement
+      );
+
+      try {
+        await audioElement.play();
+
+        console.log(
+          "Agent audio playback started."
+        );
+      } catch (error) {
+        console.error(
+          "Agent audio playback failed:",
+          error
+        );
+
+        addMessage(
+          "System",
+          "Audio playback was blocked. "
+          + "Click the page and reconnect."
+        );
+      }
+    }
+  }
+);
 
 
           /* -----------------------------------------
              CONNECT TO LIVEKIT
           ------------------------------------------ */
 
-          await currentRoom.connect(
-            LIVEKIT_URL,
-            data.token
-          );
+        try {
+  await currentRoom.startAudio();
+  console.log("LiveKit audio playback enabled.");
+} catch (error) {
+  console.warn(
+    "Could not start audio playback:",
+    error
+  );
+}
 
 
           console.log(
