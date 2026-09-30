@@ -7,31 +7,15 @@ from livekit import api
 
 
 # =========================================================
-# 1. Required environment variables
+# Required LiveKit environment variables
 # =========================================================
 
 LIVEKIT_API_KEY = os.environ["LIVEKIT_API_KEY"]
-LIVEKIT_API_SECRET = os.environ[
-    "LIVEKIT_API_SECRET"
-]
-
-# Multiple origins can be separated using commas.
-#
-# Example:
-# ALLOWED_ORIGINS=http://localhost:5500,https://example.com
-
-allowed_origins = [
-    origin.strip()
-    for origin in os.getenv(
-        "ALLOWED_ORIGINS",
-        "http://localhost:5500",
-    ).split(",")
-    if origin.strip()
-]
+LIVEKIT_API_SECRET = os.environ["LIVEKIT_API_SECRET"]
 
 
 # =========================================================
-# 2. FastAPI application
+# FastAPI application
 # =========================================================
 
 app = FastAPI(
@@ -41,23 +25,29 @@ app = FastAPI(
 
 
 # =========================================================
-# 3. CORS configuration
+# CORS configuration
+#
+# Important:
+# Origins must not have a trailing slash.
 # =========================================================
+
+allowed_origins = [
+    "https://abhigoud0008.github.io",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET"],
-    allow_headers=[
-        "Content-Type",
-        "Authorization",
-    ],
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
 # =========================================================
-# 4. Health-check endpoint
+# Health endpoint
 # =========================================================
 
 @app.get("/")
@@ -65,11 +55,12 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "livekit-token-server",
+        "cors_origins": allowed_origins,
     }
 
 
 # =========================================================
-# 5. LiveKit token endpoint
+# LiveKit token endpoint
 # =========================================================
 
 @app.get("/token")
