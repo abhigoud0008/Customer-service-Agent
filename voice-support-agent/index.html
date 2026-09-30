@@ -1046,14 +1046,10 @@
             "Details submitted to agent.";
 
 
-          addMessage(
-            "User",
-            "Submitted details: " +
-            (order || "N/A") +
-            " | " +
-            (email || "N/A")
-          );
-
+        addMessage(
+  "System",
+  "Your account details were submitted securely."
+);
 
         } catch (error) {
 
@@ -1074,67 +1070,53 @@
     /* =========================================================
        HUMAN ESCALATION
     ========================================================= */
+escalateBtn.addEventListener("click", async () => {
+  if (
+    !currentRoom ||
+    currentRoom.state !== "connected"
+  ) {
+    addMessage(
+      "System",
+      "Connect the call before requesting escalation."
+    );
+    return;
+  }
 
-    escalateBtn.addEventListener(
-      "click",
-      async () => {
+  const payload = JSON.stringify({
+    type: "manual_escalate",
+    reason: "Customer requested manual escalation"
+  });
 
-        if (
-          !currentRoom ||
-          currentRoom.state !== "connected"
-        ) {
+  const encodedPayload =
+    new TextEncoder().encode(payload);
 
-          return;
-        }
-
-
-        const payload =
-          JSON.stringify({
-
-            type:
-              "manual_escalate"
-
-          });
-
-
-        try {
-
-          await currentRoom.localParticipant
-            .publishData(
-              new TextEncoder().encode(
-                payload
-              ),
-              {
-                reliable: true
-              }
-            );
-
-
-          addMessage(
-            "User",
-            "Requested human escalation."
-          );
-
-
-          statusPill.textContent =
-            "Human escalation requested.";
-
-
-        } catch (error) {
-
-          console.error(
-            "Escalation failed:",
-            error
-          );
-
-
-          statusPill.textContent =
-            "Failed to request escalation.";
-
-        }
+  try {
+    await currentRoom.localParticipant.publishData(
+      encodedPayload,
+      {
+        reliable: true
       }
     );
 
+    addMessage(
+      "System",
+      "Your escalation request is being registered."
+    );
+
+    escalateBtn.disabled = true;
+
+  } catch (error) {
+    console.error(
+      "Escalation error:",
+      error
+    );
+
+    addMessage(
+      "System",
+      "The escalation request could not be sent."
+    );
+  }
+});
 
     /* =========================================================
        PAGE LOAD
