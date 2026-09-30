@@ -48,7 +48,10 @@ GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
 
 # Set GOOGLE_MODEL in Render to a model supported by your
 # Google account and installed LiveKit Google plugin.
-GOOGLE_MODEL = os.environ["GOOGLE_MODEL"]
+GOOGLE_MODEL = os.getenv(
+"GOOGLE_MODEL",
+"gemini-1.5-flash",
+)
 
 SMTP_SENDER_EMAIL = os.getenv(
     "SMTP_SENDER_EMAIL",
