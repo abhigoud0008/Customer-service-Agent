@@ -1,4 +1,5 @@
 livekit-agents==0.12.1
+livekit-plugins-silero==0.7.1
 livekit-plugins-google==0.7.1
 firebase-admin
 python-dotenv
