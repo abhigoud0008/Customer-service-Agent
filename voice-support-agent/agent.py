@@ -25,7 +25,7 @@ try:
 except ImportError:
     from livekit.agents import VoicePipelineAgent
 
-from livekit.plugins import google
+from livekit.plugins import google, silero
 
 
 # =========================================================
@@ -39,18 +39,24 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 
-# These values must be provided through Render or your .env file.
-# Never write real secrets directly inside this Python file.
 LIVEKIT_URL = os.environ["LIVEKIT_URL"]
 LIVEKIT_API_KEY = os.environ["LIVEKIT_API_KEY"]
 LIVEKIT_API_SECRET = os.environ["LIVEKIT_API_SECRET"]
 GOOGLE_API_KEY = os.environ["GOOGLE_API_KEY"]
 
-# Set GOOGLE_MODEL in Render to a model supported by your
-# Google account and installed LiveKit Google plugin.
 GOOGLE_MODEL = os.getenv(
-"GOOGLE_MODEL",
-"gemini-1.5-flash",
+    "GOOGLE_MODEL",
+    "gemini-1.5-flash",
+)
+
+GOOGLE_TTS_VOICE = os.getenv(
+    "GOOGLE_TTS_VOICE",
+    "en-US-Standard-H",
+)
+
+GOOGLE_SPEECH_LANGUAGE = os.getenv(
+    "GOOGLE_SPEECH_LANGUAGE",
+    "en-US",
 )
 
 SMTP_SENDER_EMAIL = os.getenv(
@@ -64,34 +70,101 @@ SMTP_APP_PASSWORD = (
     .strip()
 )
 
+FIREBASE_CREDENTIALS_JSON = os.getenv(
+    "FIREBASE_CREDENTIALS_JSON",
+    "",
+).strip()
+
 
 # =========================================================
-# 2. Firebase initialization
+# 2. Google Cloud credentials
+# =========================================================
+
+def configure_google_cloud_credentials() -> None:
+    """
+    Google Cloud STT and TTS require service-account credentials.
+
+    On Render, FIREBASE_CREDENTIALS_JSON contains the service-account
+    JSON. The JSON is written to /tmp because /tmp is writable.
+    """
+
+    existing_credentials_file = os.getenv(
+        "GOOGLE_APPLICATION_CREDENTIALS"
+    )
+
+    if existing_credentials_file:
+        logging.info(
+            "Using GOOGLE_APPLICATION_CREDENTIALS: %s",
+            existing_credentials_file,
+        )
+        return
+
+    if not FIREBASE_CREDENTIALS_JSON:
+        logging.warning(
+            "FIREBASE_CREDENTIALS_JSON is missing. "
+            "Google Cloud STT and TTS might not authenticate."
+        )
+        return
+
+    try:
+        credential_data = json.loads(
+            FIREBASE_CREDENTIALS_JSON
+        )
+
+        credential_path = (
+            "/tmp/google_service_account.json"
+        )
+
+        with open(
+            credential_path,
+            "w",
+            encoding="utf-8",
+        ) as credential_file:
+            json.dump(
+                credential_data,
+                credential_file,
+            )
+
+        os.environ[
+            "GOOGLE_APPLICATION_CREDENTIALS"
+        ] = credential_path
+
+        logging.info(
+            "Google Cloud credentials configured."
+        )
+
+    except Exception:
+        logging.exception(
+            "Google Cloud credentials could not be configured."
+        )
+        raise
+
+
+configure_google_cloud_credentials()
+
+
+# =========================================================
+# 3. Firebase initialization
 # =========================================================
 
 def initialize_firebase() -> None:
     """
     Initialize Firebase only once.
-
-    In production, FIREBASE_CREDENTIALS_JSON should contain the
-    complete Firebase service-account JSON document.
     """
 
     if firebase_admin._apps:
         return
 
-    firebase_credentials_json = os.getenv(
-        "FIREBASE_CREDENTIALS_JSON"
-    )
-
-    if firebase_credentials_json:
+    if FIREBASE_CREDENTIALS_JSON:
         try:
             credential_data = json.loads(
-                firebase_credentials_json
+                FIREBASE_CREDENTIALS_JSON
             )
 
-            firebase_credential = credentials.Certificate(
-                credential_data
+            firebase_credential = (
+                credentials.Certificate(
+                    credential_data
+                )
             )
 
         except json.JSONDecodeError as error:
@@ -100,7 +173,6 @@ def initialize_firebase() -> None:
             ) from error
 
     else:
-        # Local fallback only.
         credential_path = os.path.join(
             os.path.dirname(__file__),
             "firebase_credentials.json",
@@ -109,14 +181,22 @@ def initialize_firebase() -> None:
         if not os.path.exists(credential_path):
             raise FileNotFoundError(
                 "Firebase credentials are missing. "
-                "Set FIREBASE_CREDENTIALS_JSON."
+                "Set FIREBASE_CREDENTIALS_JSON in Render."
             )
 
-        firebase_credential = credentials.Certificate(
-            credential_path
+        firebase_credential = (
+            credentials.Certificate(
+                credential_path
+            )
         )
 
-    firebase_admin.initialize_app(firebase_credential)
+    firebase_admin.initialize_app(
+        firebase_credential
+    )
+
+    logging.info(
+        "Firebase initialized successfully."
+    )
 
 
 initialize_firebase()
@@ -125,46 +205,33 @@ db = firestore.client()
 
 
 # =========================================================
-# 3. Common helper functions
+# 4. Common helper functions
 # =========================================================
 
 def clean(value: Optional[str]) -> str:
-    """
-    Convert a possible None value to text and remove extra spaces.
-    """
-
     return (value or "").strip()
 
 
-def normalize_email(email: Optional[str]) -> str:
-    """
-    Normalize email addresses for consistent comparison.
-    """
-
+def normalize_email(
+    email: Optional[str],
+) -> str:
     return clean(email).lower()
 
 
-def normalize_ticket_id(ticket_id: Optional[str]) -> str:
-    """
-    Convert ticket IDs to uppercase.
-
-    Example:
-        tick-ab1234 -> TICK-AB1234
-    """
-
+def normalize_ticket_id(
+    ticket_id: Optional[str],
+) -> str:
     return clean(ticket_id).upper()
 
 
-def normalize_order_id(order_id: Optional[str]) -> str:
-    """
-    Preserve the order ID after removing surrounding spaces.
-    """
-
-    return clean(order_id)
+def normalize_order_id(
+    order_id: Optional[str],
+) -> str:
+    return clean(order_id).upper()
 
 
 # =========================================================
-# 4. Email function
+# 5. Email function
 # =========================================================
 
 def send_ticket_email_sync(
@@ -175,11 +242,10 @@ def send_ticket_email_sync(
     status: str,
 ) -> bool:
     """
-    Send the customer a ticket email.
-
-    This is a synchronous function, so the agent executes it
-    through asyncio.to_thread to avoid blocking audio processing.
+    Send a ticket confirmation email.
     """
+
+    to_email = normalize_email(to_email)
 
     if not SMTP_SENDER_EMAIL:
         logging.warning(
@@ -193,9 +259,9 @@ def send_ticket_email_sync(
         )
         return False
 
-    if not normalize_email(to_email):
+    if not to_email:
         logging.warning(
-            "Customer email was not provided."
+            "Customer email was not supplied."
         )
         return False
 
@@ -203,10 +269,11 @@ def send_ticket_email_sync(
         message = MIMEMultipart()
 
         message["From"] = (
-            f"Customer Support <{SMTP_SENDER_EMAIL}>"
+            f"Customer Support "
+            f"<{SMTP_SENDER_EMAIL}>"
         )
 
-        message["To"] = normalize_email(to_email)
+        message["To"] = to_email
 
         message["Subject"] = (
             f"Support Ticket #{ticket_id}"
@@ -214,7 +281,7 @@ def send_ticket_email_sync(
 
         body = (
             f"Dear {clean(customer_name) or 'Customer'},\n\n"
-            "Your customer-support ticket has been registered.\n\n"
+            "Your support ticket has been registered.\n\n"
             f"Ticket ID: {ticket_id}\n"
             f"Issue: {issue}\n"
             f"Status: {status}\n\n"
@@ -232,7 +299,6 @@ def send_ticket_email_sync(
             587,
             timeout=8,
         ) as smtp_server:
-
             smtp_server.starttls()
 
             smtp_server.login(
@@ -240,11 +306,13 @@ def send_ticket_email_sync(
                 SMTP_APP_PASSWORD,
             )
 
-            smtp_server.send_message(message)
+            smtp_server.send_message(
+                message
+            )
 
         logging.info(
-            "Ticket email sent to %s",
-            normalize_email(to_email),
+            "Ticket email sent to %s.",
+            to_email,
         )
 
         return True
@@ -253,12 +321,11 @@ def send_ticket_email_sync(
         logging.exception(
             "Ticket email could not be sent."
         )
-
         return False
 
 
 # =========================================================
-# 5. Ticket database functions
+# 6. Firestore ticket functions
 # =========================================================
 
 def create_ticket_sync(
@@ -270,7 +337,7 @@ def create_ticket_sync(
     status: str = "Open",
 ) -> dict:
     """
-    Create one Firestore support ticket.
+    Create a new support ticket.
     """
 
     customer_name = clean(customer_name)
@@ -293,33 +360,37 @@ def create_ticket_sync(
         }
 
     try:
-        # Generate a Firestore document identifier.
-        temporary_reference = (
+        generated_reference = (
             db.collection("tickets").document()
         )
 
-        # Use part of that identifier as the readable ticket ID.
         ticket_id = (
-            f"TICK-{temporary_reference.id[:8].upper()}"
+            f"TICK-"
+            f"{generated_reference.id[:8].upper()}"
         )
 
         ticket_reference = (
-            db.collection("tickets").document(ticket_id)
+            db.collection("tickets")
+            .document(ticket_id)
         )
 
-        ticket_data = {
+        ticket_reference.set({
             "customer_name": customer_name,
-            "customer_name_lower": customer_name.lower(),
+            "customer_name_lower": (
+                customer_name.lower()
+            ),
             "issue": issue,
             "email": email,
             "order_id": order_id,
             "status": status,
             "priority": priority,
-            "created_at": firestore.SERVER_TIMESTAMP,
-            "updated_at": firestore.SERVER_TIMESTAMP,
-        }
-
-        ticket_reference.set(ticket_data)
+            "created_at": (
+                firestore.SERVER_TIMESTAMP
+            ),
+            "updated_at": (
+                firestore.SERVER_TIMESTAMP
+            ),
+        })
 
         logging.info(
             "Ticket %s created successfully.",
@@ -341,19 +412,23 @@ def create_ticket_sync(
         return {
             "ok": False,
             "message": (
-                "The ticket could not be created because "
-                "the database operation failed."
+                "The ticket could not be created "
+                "because the database operation failed."
             ),
             "error": str(error),
         }
 
 
-def get_ticket_sync(ticket_id: str) -> dict:
+def get_ticket_sync(
+    ticket_id: str,
+) -> dict:
     """
-    Retrieve one ticket using its exact ticket ID.
+    Retrieve a ticket by exact ticket ID.
     """
 
-    ticket_id = normalize_ticket_id(ticket_id)
+    ticket_id = normalize_ticket_id(
+        ticket_id
+    )
 
     if not ticket_id:
         return {
@@ -376,7 +451,9 @@ def get_ticket_sync(ticket_id: str) -> dict:
                 ),
             }
 
-        ticket_data = ticket_document.to_dict() or {}
+        ticket_data = (
+            ticket_document.to_dict() or {}
+        )
 
         return {
             "ok": True,
@@ -417,21 +494,23 @@ def get_ticket_sync(ticket_id: str) -> dict:
         return {
             "ok": False,
             "message": (
-                "The ticket could not be retrieved because "
-                "the database operation failed."
+                "The ticket could not be retrieved "
+                "because the database operation failed."
             ),
             "error": str(error),
         }
 
 
-def find_tickets_sync(search_term: str) -> dict:
+def find_tickets_sync(
+    search_term: str,
+) -> dict:
     """
-    Find tickets by exact email or exact customer name.
-
-    At most 10 tickets are returned for a short and fast response.
+    Find tickets using an exact email or customer name.
     """
 
-    search_term = clean(search_term).lower()
+    search_term = clean(
+        search_term
+    ).lower()
 
     if not search_term:
         return {
@@ -443,12 +522,16 @@ def find_tickets_sync(search_term: str) -> dict:
         }
 
     try:
-        tickets_reference = db.collection("tickets")
+        tickets_reference = (
+            db.collection("tickets")
+        )
 
         if "@" in search_term:
             search_field = "email"
         else:
-            search_field = "customer_name_lower"
+            search_field = (
+                "customer_name_lower"
+            )
 
         matching_documents = (
             tickets_reference
@@ -464,7 +547,9 @@ def find_tickets_sync(search_term: str) -> dict:
         tickets = []
 
         for document in matching_documents:
-            ticket_data = document.to_dict() or {}
+            ticket_data = (
+                document.to_dict() or {}
+            )
 
             tickets.append({
                 "ticket_id": document.id,
@@ -495,8 +580,8 @@ def find_tickets_sync(search_term: str) -> dict:
         return {
             "ok": False,
             "message": (
-                "Tickets could not be searched because "
-                "the database operation failed."
+                "Tickets could not be searched "
+                "because the database operation failed."
             ),
             "tickets": [],
             "error": str(error),
@@ -510,23 +595,23 @@ def update_ticket_sync(
     new_status: str = "",
 ) -> dict:
     """
-    Update an existing ticket after verifying its email.
-
-    Supported statuses:
-        Open
-        In Progress
-        Resolved
-        Closed
+    Update a ticket after registered-email verification.
     """
 
-    ticket_id = normalize_ticket_id(ticket_id)
+    ticket_id = normalize_ticket_id(
+        ticket_id
+    )
 
-    existing_result = get_ticket_sync(ticket_id)
+    existing_result = get_ticket_sync(
+        ticket_id
+    )
 
     if not existing_result.get("ok"):
         return existing_result
 
-    existing_ticket = existing_result["ticket"]
+    existing_ticket = (
+        existing_result["ticket"]
+    )
 
     saved_email = normalize_email(
         existing_ticket.get("email")
@@ -540,8 +625,8 @@ def update_ticket_sync(
         return {
             "ok": False,
             "message": (
-                "This ticket does not contain a registered "
-                "email and cannot be updated automatically."
+                "This ticket does not contain a "
+                "registered email."
             ),
         }
 
@@ -558,7 +643,9 @@ def update_ticket_sync(
     new_status = clean(new_status)
 
     changes = {
-        "updated_at": firestore.SERVER_TIMESTAMP,
+        "updated_at": (
+            firestore.SERVER_TIMESTAMP
+        ),
     }
 
     if new_issue:
@@ -573,27 +660,30 @@ def update_ticket_sync(
             "closed": "Closed",
         }
 
-        normalized_status = new_status.lower()
+        normalized_status = (
+            new_status.lower()
+        )
 
         if normalized_status not in allowed_statuses:
             return {
                 "ok": False,
                 "message": (
-                    "Status must be Open, In Progress, "
-                    "Resolved, or Closed."
+                    "Status must be Open, "
+                    "In Progress, Resolved, or Closed."
                 ),
             }
 
-        changes["status"] = allowed_statuses[
-            normalized_status
-        ]
+        changes["status"] = (
+            allowed_statuses[
+                normalized_status
+            ]
+        )
 
     if len(changes) == 1:
         return {
             "ok": False,
             "message": (
-                "Provide either a new issue description "
-                "or a new status."
+                "Provide a new issue or new status."
             ),
         }
 
@@ -623,8 +713,8 @@ def update_ticket_sync(
         return {
             "ok": False,
             "message": (
-                "The ticket could not be updated because "
-                "the database operation failed."
+                "The ticket could not be updated "
+                "because the database operation failed."
             ),
             "error": str(error),
         }
@@ -635,17 +725,23 @@ def delete_ticket_sync(
     verification_email: str,
 ) -> dict:
     """
-    Permanently delete a ticket after email verification.
+    Permanently delete a verified ticket.
     """
 
-    ticket_id = normalize_ticket_id(ticket_id)
+    ticket_id = normalize_ticket_id(
+        ticket_id
+    )
 
-    existing_result = get_ticket_sync(ticket_id)
+    existing_result = get_ticket_sync(
+        ticket_id
+    )
 
     if not existing_result.get("ok"):
         return existing_result
 
-    existing_ticket = existing_result["ticket"]
+    existing_ticket = (
+        existing_result["ticket"]
+    )
 
     saved_email = normalize_email(
         existing_ticket.get("email")
@@ -659,8 +755,8 @@ def delete_ticket_sync(
         return {
             "ok": False,
             "message": (
-                "This ticket does not contain a registered "
-                "email and cannot be deleted automatically."
+                "This ticket does not contain a "
+                "registered email."
             ),
         }
 
@@ -687,7 +783,8 @@ def delete_ticket_sync(
             "ok": True,
             "ticket_id": ticket_id,
             "message": (
-                f"Ticket {ticket_id} was deleted permanently."
+                f"Ticket {ticket_id} "
+                "was deleted permanently."
             ),
         }
 
@@ -699,23 +796,27 @@ def delete_ticket_sync(
         return {
             "ok": False,
             "message": (
-                "The ticket could not be deleted because "
-                "the database operation failed."
+                "The ticket could not be deleted "
+                "because the database operation failed."
             ),
             "error": str(error),
         }
 
 
 # =========================================================
-# 6. Order retrieval function
+# 7. Order retrieval function
 # =========================================================
 
-def lookup_order_sync(order_id: str) -> dict:
+def lookup_order_sync(
+    order_id: str,
+) -> dict:
     """
-    Retrieve an order using the Firestore document ID.
+    Retrieve an order by exact Firestore document ID.
     """
 
-    order_id = normalize_order_id(order_id)
+    order_id = normalize_order_id(
+        order_id
+    )
 
     if not order_id:
         return {
@@ -741,7 +842,9 @@ def lookup_order_sync(order_id: str) -> dict:
         return {
             "ok": True,
             "order_id": order_document.id,
-            "order": order_document.to_dict() or {},
+            "order": (
+                order_document.to_dict() or {}
+            ),
         }
 
     except Exception as error:
@@ -752,32 +855,32 @@ def lookup_order_sync(order_id: str) -> dict:
         return {
             "ok": False,
             "message": (
-                "The order could not be retrieved because "
-                "the database operation failed."
+                "The order could not be retrieved "
+                "because the database operation failed."
             ),
             "error": str(error),
         }
 
 
 # =========================================================
-# 7. AI-callable customer-service tools
+# 8. AI-callable service tools
 # =========================================================
 
-class SupportFunctionContext(llm.FunctionContext):
-    """
-    Functions inside this class are available to the AI model.
-    """
-
-    def __init__(self, session_state: dict):
+class SupportFunctionContext(
+    llm.FunctionContext
+):
+    def __init__(
+        self,
+        session_state: dict,
+    ):
         super().__init__()
-
         self.session_state = session_state
 
     @llm.ai_callable(
         description=(
-            "Create a customer-support ticket. "
-            "Before calling, collect the customer's full name, "
-            "issue, and email. Order ID is optional."
+            "Create a support ticket. Collect the "
+            "customer name, issue, and email first. "
+            "Order ID is optional."
         )
     )
     async def create_support_ticket(
@@ -807,14 +910,16 @@ class SupportFunctionContext(llm.FunctionContext):
         status = result["status"]
 
         self.session_state.update({
-            "customer_name": clean(customer_name),
-            "email": normalize_email(email),
+            "customer_name": clean(
+                customer_name
+            ),
+            "email": normalize_email(
+                email
+            ),
             "last_ticket_id": ticket_id,
             "last_issue": clean(issue),
         })
 
-        # Email runs in the background so the voice response
-        # does not wait for Gmail.
         if normalize_email(email):
             asyncio.create_task(
                 asyncio.to_thread(
@@ -834,8 +939,8 @@ class SupportFunctionContext(llm.FunctionContext):
 
     @llm.ai_callable(
         description=(
-            "Retrieve one support ticket using its exact "
-            "ticket ID."
+            "Retrieve one support ticket "
+            "using its exact ticket ID."
         )
     )
     async def get_support_ticket(
@@ -864,8 +969,8 @@ class SupportFunctionContext(llm.FunctionContext):
 
     @llm.ai_callable(
         description=(
-            "Find up to ten support tickets using the "
-            "customer's exact full name or exact email."
+            "Find support tickets using the "
+            "customer's exact full name or email."
         )
     )
     async def find_support_tickets(
@@ -883,12 +988,17 @@ class SupportFunctionContext(llm.FunctionContext):
                 "Tickets could not be searched.",
             )
 
-        tickets = result.get("tickets", [])
+        tickets = result.get(
+            "tickets",
+            [],
+        )
 
         if not tickets:
-            return "No support tickets were found."
+            return (
+                "No support tickets were found."
+            )
 
-        ticket_messages = [
+        results = [
             (
                 f"{ticket['ticket_id']}: "
                 f"{ticket['status']}, "
@@ -897,13 +1007,13 @@ class SupportFunctionContext(llm.FunctionContext):
             for ticket in tickets
         ]
 
-        return "; ".join(ticket_messages)
+        return "; ".join(results)
 
     @llm.ai_callable(
         description=(
-            "Update a support ticket's issue or status. "
-            "The exact ticket ID and registered email are "
-            "required for verification."
+            "Update a ticket's issue or status. "
+            "Require the exact ticket ID and "
+            "registered email."
         )
     )
     async def update_support_ticket(
@@ -928,10 +1038,10 @@ class SupportFunctionContext(llm.FunctionContext):
 
     @llm.ai_callable(
         description=(
-            "Permanently delete a support ticket. "
-            "Ask for the exact ticket ID and registered email. "
-            "Explain that deletion is permanent and get explicit "
-            "confirmation immediately before calling this tool."
+            "Permanently delete a ticket. "
+            "Require the exact ticket ID and "
+            "registered email. Obtain explicit "
+            "confirmation immediately before calling."
         )
     )
     async def delete_support_ticket(
@@ -942,9 +1052,9 @@ class SupportFunctionContext(llm.FunctionContext):
     ) -> str:
         if not confirmed:
             return (
-                "Deletion has not been confirmed. "
-                "Ask the customer to clearly confirm permanent "
-                "deletion."
+                "Deletion is not confirmed. "
+                "Ask the customer to clearly "
+                "confirm permanent deletion."
             )
 
         result = await asyncio.to_thread(
@@ -960,8 +1070,8 @@ class SupportFunctionContext(llm.FunctionContext):
 
     @llm.ai_callable(
         description=(
-            "Retrieve customer order information using "
-            "the exact order ID."
+            "Retrieve order information "
+            "using the exact order ID."
         )
     )
     async def lookup_order(
@@ -983,7 +1093,10 @@ class SupportFunctionContext(llm.FunctionContext):
 
         item = order.get(
             "item",
-            order.get("items", "Not listed"),
+            order.get(
+                "items",
+                "Not listed",
+            ),
         )
 
         status = order.get(
@@ -996,22 +1109,22 @@ class SupportFunctionContext(llm.FunctionContext):
             "",
         )
 
-        answer = (
-            f"Order {result['order_id']} status is {status}. "
-            f"Item: {item}."
+        response = (
+            f"Order {result['order_id']} "
+            f"status is {status}. Item: {item}."
         )
 
         if delivery_date:
-            answer += (
+            response += (
                 f" Delivery date: {delivery_date}."
             )
 
-        return answer
+        return response
 
     @llm.ai_callable(
         description=(
-            "Escalate a customer problem by creating a "
-            "high-priority escalation ticket."
+            "Escalate a customer issue by creating "
+            "a high-priority escalation ticket."
         )
     )
     async def escalate_to_human(
@@ -1039,8 +1152,12 @@ class SupportFunctionContext(llm.FunctionContext):
         ticket_id = result["ticket_id"]
 
         self.session_state.update({
-            "customer_name": clean(customer_name),
-            "email": normalize_email(email),
+            "customer_name": clean(
+                customer_name
+            ),
+            "email": normalize_email(
+                email
+            ),
             "last_ticket_id": ticket_id,
             "last_issue": clean(reason),
         })
@@ -1058,85 +1175,162 @@ class SupportFunctionContext(llm.FunctionContext):
             )
 
         return (
-            f"Escalation ticket {ticket_id} was created "
-            "with high priority."
+            f"Escalation ticket {ticket_id} "
+            "was created with high priority."
         )
 
 
 # =========================================================
-# 8. LiveKit agent session
+# 9. Worker prewarming
 # =========================================================
 
-async def entrypoint(ctx: JobContext) -> None:
+def prewarm_process(proc) -> None:
     """
-    Main function executed for every LiveKit agent job.
+    Load Silero VAD before receiving a customer call.
     """
 
-    await ctx.connect(
-        auto_subscribe=AutoSubscribe.AUDIO_ONLY
+    logging.info(
+        "Loading Silero VAD..."
     )
+
+    proc.userdata["vad"] = (
+        silero.VAD.load()
+    )
+
+    logging.info(
+        "Silero VAD loaded successfully."
+    )
+
+
+# =========================================================
+# 10. LiveKit agent session
+# =========================================================
+
+async def entrypoint(
+    ctx: JobContext,
+) -> None:
+    """
+    Run one customer-support voice session.
+    """
+
+    logging.info(
+        "Agent job received."
+    )
+
+    try:
+        await ctx.connect(
+            auto_subscribe=(
+                AutoSubscribe.AUDIO_ONLY
+            )
+        )
+
+        logging.info(
+            "Agent connected to room: %s",
+            ctx.room.name,
+        )
+
+    except Exception:
+        logging.exception(
+            "Agent could not connect "
+            "to the LiveKit room."
+        )
+        raise
 
     session_state = {
         "email": "",
         "customer_name": "Customer",
         "last_ticket_id": "",
         "last_issue": "",
+        "order_id": "",
     }
 
     agent_instructions = (
         "You are a fast customer-service voice agent. "
         "First ask which language the customer wants to use. "
-        "After the customer chooses a language, continue in that "
-        "language. "
-        "Reply using no more than two short sentences. "
-        "Use a tool immediately when you have the required values. "
+        "After the customer chooses a language, continue in "
+        "that language. "
+        "Keep responses concise, using no more than two short "
+        "sentences. "
+        "Use a tool immediately when all required values are "
+        "available. "
         "You can create, retrieve, search, update, and delete "
         "support tickets. "
         "You can also retrieve orders and escalate issues. "
-        "For ticket creation, collect customer name, issue, and "
-        "email. Order ID is optional. "
-        "For ticket updates, require the ticket ID and matching "
+        "For ticket creation, collect customer name, issue, "
+        "and email. Order ID is optional. "
+        "For ticket updates, require the exact ticket ID and "
         "registered email. "
-        "For deletion, require the ticket ID and matching email. "
-        "Explain that deletion is permanent and obtain clear "
-        "confirmation before calling the deletion tool. "
-        "Never claim that a database operation succeeded unless "
-        "the tool result says it succeeded. "
-        "Do not reveal stored email addresses or private data."
+        "For ticket deletion, require the exact ticket ID and "
+        "registered email. Explain that deletion is permanent "
+        "and obtain explicit confirmation. "
+        "Never claim an operation succeeded unless the tool "
+        "result says it succeeded. "
+        "Never reveal a customer's stored email address."
     )
 
     function_context = SupportFunctionContext(
         session_state
     )
 
-    agent = VoicePipelineAgent(
-        stt=google.STT(),
-        llm=google.LLM(
-            model=GOOGLE_MODEL
-        ),
-        tts=google.TTS(
-            voice_name="Aoede"
-        ),
-        chat_ctx=llm.ChatContext().append(
-            role="system",
-            text=agent_instructions,
-        ),
-        fnc_ctx=function_context,
-    )
+    try:
+        logging.info(
+            "Creating voice pipeline. "
+            "Gemini model: %s, voice: %s",
+            GOOGLE_MODEL,
+            GOOGLE_TTS_VOICE,
+        )
 
-    async def broadcast_event(data: dict) -> None:
-        """
-        Send transcripts and status messages to the browser.
-        """
+        agent = VoicePipelineAgent(
+            vad=ctx.proc.userdata["vad"],
+            stt=google.STT(
+                languages=[
+                    GOOGLE_SPEECH_LANGUAGE
+                ]
+            ),
+            llm=google.LLM(
+                model=GOOGLE_MODEL,
+            ),
+            tts=google.TTS(
+                language=(
+                    GOOGLE_SPEECH_LANGUAGE
+                ),
+                voice_name=(
+                    GOOGLE_TTS_VOICE
+                ),
+            ),
+            chat_ctx=(
+                llm.ChatContext().append(
+                    role="system",
+                    text=agent_instructions,
+                )
+            ),
+            fnc_ctx=function_context,
+        )
 
+        logging.info(
+            "Voice pipeline created successfully."
+        )
+
+    except Exception:
+        logging.exception(
+            "Voice pipeline initialization failed."
+        )
+        raise
+
+    async def broadcast_event(
+        data: dict,
+    ) -> None:
         try:
-            encoded_payload = json.dumps(
+            payload = json.dumps(
                 data
             ).encode("utf-8")
 
-            await ctx.room.local_participant.publish_data(
-                encoded_payload,
-                reliable=True,
+            await (
+                ctx.room.local_participant
+                .publish_data(
+                    payload,
+                    reliable=True,
+                )
             )
 
         except Exception:
@@ -1144,7 +1338,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 "LiveKit data broadcast failed."
             )
 
-    @agent.on("agent_speech_committed")
+    @agent.on(
+        "agent_speech_committed"
+    )
     def on_agent_speech(message):
         asyncio.create_task(
             broadcast_event({
@@ -1154,7 +1350,9 @@ async def entrypoint(ctx: JobContext) -> None:
             })
         )
 
-    @agent.on("user_speech_committed")
+    @agent.on(
+        "user_speech_committed"
+    )
     def on_user_speech(message):
         asyncio.create_task(
             broadcast_event({
@@ -1166,35 +1364,28 @@ async def entrypoint(ctx: JobContext) -> None:
 
     @ctx.room.on("data_received")
     def on_data_received(data_packet):
-        """
-        Receive email submission or escalation data from index.html.
-        """
-
         async def handle_data() -> None:
             try:
                 payload = json.loads(
-                    data_packet.data.decode("utf-8")
+                    data_packet.data.decode(
+                        "utf-8"
+                    )
                 )
 
                 action = payload.get("type")
 
                 if action == "email_submission":
-                    submitted_email = normalize_email(
-                        payload.get("email")
-                    )
-
-                    submitted_order_id = normalize_order_id(
-                        payload.get("order_id")
-                    )
-
                     session_state["email"] = (
-                        submitted_email
+                        normalize_email(
+                            payload.get("email")
+                        )
                     )
 
-                    if submitted_order_id:
-                        session_state["order_id"] = (
-                            submitted_order_id
+                    session_state["order_id"] = (
+                        normalize_order_id(
+                            payload.get("order_id")
                         )
+                    )
 
                     await broadcast_event({
                         "type": "status",
@@ -1204,56 +1395,102 @@ async def entrypoint(ctx: JobContext) -> None:
                     })
 
                 elif action == "manual_escalate":
-                    escalation_reason = clean(
+                    reason = clean(
                         payload.get("reason")
                     )
 
-                    if not escalation_reason:
-                        escalation_reason = (
-                            session_state["last_issue"]
-                            or "Manual escalation requested"
+                    if not reason:
+                        reason = (
+                            session_state[
+                                "last_issue"
+                            ]
+                            or (
+                                "Manual escalation "
+                                "requested"
+                            )
                         )
 
-                    escalation_result = (
-                        await function_context.escalate_to_human(
-                            session_state["customer_name"],
-                            escalation_reason,
-                            session_state["email"],
+                    result = await (
+                        function_context
+                        .escalate_to_human(
+                            session_state[
+                                "customer_name"
+                            ],
+                            reason,
+                            session_state[
+                                "email"
+                            ],
                         )
                     )
 
                     await broadcast_event({
                         "type": "transcript",
                         "sender": "System",
-                        "text": escalation_result,
+                        "text": result,
                     })
 
             except Exception:
                 logging.exception(
-                    "Browser data could not be processed."
+                    "Browser data could not "
+                    "be processed."
                 )
 
-        asyncio.create_task(handle_data())
+        asyncio.create_task(
+            handle_data()
+        )
 
-    agent.start(ctx.room)
+    try:
+        logging.info(
+            "Starting voice agent."
+        )
 
-    await agent.say(
-        (
-            "Welcome to customer support. "
-            "Which language would you like to use?"
-        ),
-        allow_interruptions=True,
-    )
+        agent.start(
+            ctx.room
+        )
+
+        logging.info(
+            "Voice agent started. "
+            "Generating welcome message."
+        )
+
+        await broadcast_event({
+            "type": "transcript",
+            "sender": "Agent",
+            "text": (
+                "Welcome to customer support. "
+                "Which language would you like to use?"
+            ),
+        })
+
+        await agent.say(
+            (
+                "Welcome to customer support. "
+                "Which language would you like to use?"
+            ),
+            allow_interruptions=True,
+        )
+
+        logging.info(
+            "Welcome message completed."
+        )
+
+    except Exception:
+        logging.exception(
+            "Agent failed while starting "
+            "or speaking."
+        )
+        raise
 
 
 # =========================================================
-# 9. Start the LiveKit worker
+# 11. Start the LiveKit worker
 # =========================================================
 
 if __name__ == "__main__":
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=entrypoint,
+            prewarm_fnc=prewarm_process,
             agent_name="",
         )
     )
