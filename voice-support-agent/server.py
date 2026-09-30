@@ -1,42 +1,98 @@
 import os
 import uuid
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from livekit import api
 
-app = FastAPI()
+
+# =========================================================
+# 1. Required environment variables
+# =========================================================
+
+LIVEKIT_API_KEY = os.environ["LIVEKIT_API_KEY"]
+LIVEKIT_API_SECRET = os.environ[
+    "LIVEKIT_API_SECRET"
+]
+
+# Multiple origins can be separated using commas.
+#
+# Example:
+# ALLOWED_ORIGINS=http://localhost:5500,https://example.com
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:5500",
+    ).split(",")
+    if origin.strip()
+]
+
+
+# =========================================================
+# 2. FastAPI application
+# =========================================================
+
+app = FastAPI(
+    title="LiveKit Token Server",
+    version="1.0.0",
+)
+
+
+# =========================================================
+# 3. CORS configuration
+# =========================================================
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+    ],
 )
 
-LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY", "APIAXSLvd8JfCon")
-LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET", "YyVvszb26v7BhwoiIeccN4MeeyuLBx0Z9zUYgaz1cEMB")
-LIVEKIT_URL = os.getenv("LIVEKIT_URL", "wss://customer-service-agent-44fnvuqu.livekit.cloud")
+
+# =========================================================
+# 4. Health-check endpoint
+# =========================================================
 
 @app.get("/")
 async def health_check():
-    """Endpoint for cron-job.org to keep Render alive with 200 OK."""
-    return {"status": "healthy", "service": "livekit-token-server"}
+    return {
+        "status": "healthy",
+        "service": "livekit-token-server",
+    }
+
+
+# =========================================================
+# 5. LiveKit token endpoint
+# =========================================================
 
 @app.get("/token")
 async def get_token():
-    """Generates unique room and participant identity for every caller."""
-    unique_user = f"user-{uuid.uuid4().hex[:6]}"
-    unique_room = f"support-{uuid.uuid4().hex[:6]}"
+    participant_id = (
+        f"user-{uuid.uuid4().hex[:8]}"
+    )
 
-    token = (
-        api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET)
-        .with_identity(unique_user)
+    room_name = (
+        f"support-{uuid.uuid4().hex[:8]}"
+    )
+
+    access_token = (
+        api.AccessToken(
+            LIVEKIT_API_KEY,
+            LIVEKIT_API_SECRET,
+        )
+        .with_identity(participant_id)
         .with_name("Customer")
         .with_grants(
             api.VideoGrants(
                 room_join=True,
-                room=unique_room,
+                room=room_name,
                 can_publish=True,
                 can_subscribe=True,
                 can_publish_data=True,
@@ -44,4 +100,8 @@ async def get_token():
         )
     )
 
-    return {"token": token.to_jwt(), "room": unique_room}
+    return {
+        "token": access_token.to_jwt(),
+        "room": room_name,
+        "participant": participant_id,
+    }
