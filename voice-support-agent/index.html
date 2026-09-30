@@ -949,44 +949,44 @@
           );
 
           if (
-            track.kind !==
-            LivekitClient.Track.Kind.Audio
-          ) {
-            return;
-          }
+  track.kind ===
+  LivekitClient.Track.Kind.Audio
+) {
+  const audioElement =
+    track.attach();
 
-          const audioElement =
-            track.attach();
+  audioElement.autoplay = true;
+  audioElement.playsInline = true;
+  audioElement.muted = false;
+  audioElement.volume = 1;
 
-          audioElement.autoplay = true;
-          audioElement.playsInline = true;
-          audioElement.controls = false;
-          audioElement.volume = 1;
+  remoteAudioContainer.appendChild(
+    audioElement
+  );
 
-          remoteAudioContainer.appendChild(
-            audioElement
-          );
+  try {
+    await currentRoom.startAudio();
+    await audioElement.play();
 
-          try {
-            await audioElement.play();
+    console.log(
+      "Agent audio playback started."
+    );
 
-            console.log(
-              "Agent audio playback started."
-            );
-          } catch (error) {
-            console.error(
-              "Agent audio playback was blocked:",
-              error
-            );
+  } catch (error) {
+    console.warn(
+      "Mobile browser blocked agent audio:",
+      error
+    );
 
-            addMessage(
-              "System",
-              "The browser blocked agent audio. Click anywhere on the page and reconnect."
-            );
-          }
-        }
-      );
+    statusPill.textContent =
+      "Tap the screen to enable audio";
 
+    addMessage(
+      "System",
+      "Tap anywhere on the screen to enable agent audio."
+    );
+  }
+}
 
       room.on(
         LivekitClient.RoomEvent
@@ -1549,6 +1549,62 @@
         }
       }
     );
+    async function resumeMobileAudio() {
+  if (!currentRoom) {
+    return;
+  }
+
+  try {
+    await currentRoom.startAudio();
+
+    const audioElements =
+      document.querySelectorAll(
+        "#remoteAudioContainer audio"
+      );
+
+    for (
+      const audioElement of audioElements
+    ) {
+      audioElement.muted = false;
+      audioElement.volume = 1;
+      audioElement.playsInline = true;
+
+      try {
+        await audioElement.play();
+      } catch (error) {
+        console.warn(
+          "Mobile audio element could not resume:",
+          error
+        );
+      }
+    }
+
+    console.log(
+      "Mobile agent audio resumed."
+    );
+
+  } catch (error) {
+    console.warn(
+      "LiveKit audio could not resume:",
+      error
+    );
+  }
+}
+
+
+document.addEventListener(
+  "click",
+  resumeMobileAudio
+);
+
+
+document.addEventListener(
+  "touchstart",
+  resumeMobileAudio,
+  {
+    passive: true
+  }
+);
 
 
     /*
