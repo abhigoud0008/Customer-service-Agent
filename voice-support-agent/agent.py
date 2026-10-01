@@ -86,7 +86,7 @@ FIREBASE_CREDENTIALS_JSON = os.environ[
 
 GEMINI_LIVE_MODEL = os.getenv(
     "GEMINI_LIVE_MODEL",
-    "gemini-2.5-flash-native-audio-preview-12-2025",
+    "gemini-3.8-live",
 )
 
 GEMINI_VOICE = os.getenv(
@@ -1793,6 +1793,9 @@ async def entrypoint(
             model=GEMINI_LIVE_MODEL,
             api_key=GOOGLE_API_KEY,
             voice=GEMINI_VOICE,
+            modalities=["AUDIO"],
+            input_audio_transcription={},
+            output_audio_transcription={},
             temperature=0.2,
             instructions=(
                 "Respond quickly and naturally. "
