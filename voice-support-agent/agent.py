@@ -45,12 +45,12 @@ logger = logging.getLogger(
 )
 
 logger.info(
-    "AGENT BUILD: FIREBASE-TICKET-EMAIL-V3"
+    "AGENT BUILD: FIREBASE-EMAIL-FIX-V4"
 )
 
 
 # =========================================================
-# 2. REQUIRED ENVIRONMENT VARIABLES
+# 2. ENVIRONMENT VARIABLES
 # =========================================================
 
 REQUIRED_ENVIRONMENT_VARIABLES = [
@@ -63,8 +63,7 @@ REQUIRED_ENVIRONMENT_VARIABLES = [
 
 missing_environment_variables = [
     variable_name
-    for variable_name
-    in REQUIRED_ENVIRONMENT_VARIABLES
+    for variable_name in REQUIRED_ENVIRONMENT_VARIABLES
     if not os.getenv(variable_name)
 ]
 
@@ -85,27 +84,15 @@ FIREBASE_CREDENTIALS_JSON = os.environ[
     "FIREBASE_CREDENTIALS_JSON"
 ]
 
-
-# =========================================================
-# 3. GEMINI LIVE CONFIGURATION
-# =========================================================
-
 GEMINI_LIVE_MODEL = os.getenv(
     "GEMINI_LIVE_MODEL",
     "gemini-2.5-flash-native-audio-preview-12-2025",
 )
 
-# Flare is not a supported Gemini Live voice.
-# Zephyr is a valid bright voice.
 GEMINI_VOICE = os.getenv(
     "GEMINI_VOICE",
     "Zephyr",
 )
-
-
-# =========================================================
-# 4. EMAIL CONFIGURATION
-# =========================================================
 
 SMTP_SENDER_EMAIL = os.getenv(
     "SMTP_SENDER_EMAIL",
@@ -123,7 +110,7 @@ SMTP_APP_PASSWORD = (
 
 
 # =========================================================
-# 5. CUSTOMER-SERVICE CONFIGURATION
+# 3. AGENT CONFIGURATION
 # =========================================================
 
 SUPPORTED_LANGUAGES = (
@@ -140,12 +127,12 @@ WELCOME_MESSAGE = (
 
 
 # =========================================================
-# 6. FIREBASE INITIALIZATION
+# 4. FIREBASE INITIALIZATION
 # =========================================================
 
 def initialize_firebase() -> None:
     """
-    Initialize Firebase Admin only once in each worker process.
+    Initialize Firebase Admin once in each worker process.
     """
 
     if firebase_admin._apps:
@@ -159,19 +146,22 @@ def initialize_firebase() -> None:
             FIREBASE_CREDENTIALS_JSON
         )
 
-        firebase_project_id = service_account_data.get(
-            "project_id",
-            "",
+        firebase_project_id = (
+            service_account_data.get(
+                "project_id",
+                "",
+            )
         )
 
         if not firebase_project_id:
             raise RuntimeError(
-                "Firebase service-account JSON does not "
-                "contain a project_id."
+                "Firebase credentials do not contain project_id."
             )
 
-        firebase_credential = credentials.Certificate(
-            service_account_data
+        firebase_credential = (
+            credentials.Certificate(
+                service_account_data
+            )
         )
 
         firebase_admin.initialize_app(
@@ -205,7 +195,7 @@ database = firestore.client()
 
 
 # =========================================================
-# 7. GENERAL HELPERS
+# 5. COMMON HELPERS
 # =========================================================
 
 def clean_text(
@@ -225,21 +215,84 @@ def normalize_email(
     value: Any,
 ) -> str:
     """
-    Normalize email addresses for storage and comparison.
+    Normalize typed or spoken email text.
+
+    Typed website email is preferred when creating tickets.
     """
 
-    return clean_text(
+    email = clean_text(
         value
     ).lower()
+
+    email = email.replace(
+        "mailto:",
+        "",
+    )
+
+    email = email.replace(
+        " ",
+        "",
+    )
+
+    email = email.replace(
+        "\n",
+        "",
+    )
+
+    email = email.replace(
+        "\r",
+        "",
+    )
+
+    return email
+
+
+def validate_email(
+    email: str,
+) -> bool:
+    """
+    Check the basic structure of an email address.
+    """
+
+    email = normalize_email(
+        email
+    )
+
+    if not email:
+        return False
+
+    if email.count("@") != 1:
+        return False
+
+    local_part, domain = email.split(
+        "@",
+        1,
+    )
+
+    if not local_part:
+        return False
+
+    if not domain:
+        return False
+
+    if "." not in domain:
+        return False
+
+    if domain.startswith("."):
+        return False
+
+    if domain.endswith("."):
+        return False
+
+    if ".." in email:
+        return False
+
+    return True
 
 
 def normalize_order_id(
     value: Any,
 ) -> str:
-    """
-    Normalize an order ID.
-    """
-
     return clean_text(
         value
     ).upper()
@@ -248,10 +301,6 @@ def normalize_order_id(
 def normalize_ticket_id(
     value: Any,
 ) -> str:
-    """
-    Normalize a ticket ID.
-    """
-
     return clean_text(
         value
     ).upper()
@@ -259,7 +308,7 @@ def normalize_ticket_id(
 
 def create_ticket_id() -> str:
     """
-    Create a readable ticket ID.
+    Generate a readable unique ticket ID.
 
     Example:
         TICK-A12BC34D
@@ -274,39 +323,8 @@ def create_ticket_id() -> str:
     return f"TICK-{random_part}"
 
 
-def validate_email(
-    email: str,
-) -> bool:
-    """
-    Perform basic email validation.
-    """
-
-    email = normalize_email(
-        email
-    )
-
-    if not email:
-        return False
-
-    if "@" not in email:
-        return False
-
-    local_part, domain = email.rsplit(
-        "@",
-        1,
-    )
-
-    if not local_part:
-        return False
-
-    if "." not in domain:
-        return False
-
-    return True
-
-
 # =========================================================
-# 8. FIRESTORE CREATE TICKET
+# 6. CREATE FIRESTORE TICKET
 # =========================================================
 
 def create_ticket_in_firestore(
@@ -318,7 +336,7 @@ def create_ticket_in_firestore(
     status: str = "Open",
 ) -> dict:
     """
-    Create and verify a support ticket in Firestore.
+    Create and verify a ticket in Firestore.
     """
 
     customer_name = clean_text(
@@ -350,33 +368,25 @@ def create_ticket_in_firestore(
     if not customer_name:
         return {
             "ok": False,
-            "message": (
-                "Customer name is required."
-            ),
+            "message": "Customer name is required.",
         }
 
     if not email:
         return {
             "ok": False,
-            "message": (
-                "Customer email is required."
-            ),
+            "message": "Customer email is required.",
         }
 
     if not validate_email(email):
         return {
             "ok": False,
-            "message": (
-                "The customer email address is invalid."
-            ),
+            "message": "The customer email is invalid.",
         }
 
     if not issue:
         return {
             "ok": False,
-            "message": (
-                "Issue description is required."
-            ),
+            "message": "Issue description is required.",
         }
 
     ticket_id = create_ticket_id()
@@ -411,14 +421,8 @@ def create_ticket_in_firestore(
             .document(ticket_id)
         )
 
-        write_result = ticket_reference.set(
+        ticket_reference.set(
             ticket_data
-        )
-
-        logger.info(
-            "Firestore write completed for %s: %s",
-            ticket_id,
-            write_result,
         )
 
         saved_document = (
@@ -427,7 +431,7 @@ def create_ticket_in_firestore(
 
         if not saved_document.exists:
             raise RuntimeError(
-                "Firestore write verification failed."
+                "Firestore ticket verification failed."
             )
 
         saved_data = (
@@ -440,7 +444,7 @@ def create_ticket_in_firestore(
             != ticket_id
         ):
             raise RuntimeError(
-                "The saved ticket ID did not match."
+                "Saved ticket ID does not match."
             )
 
         logger.info(
@@ -467,22 +471,21 @@ def create_ticket_in_firestore(
         return {
             "ok": False,
             "message": (
-                "The ticket could not be saved "
-                "in Firestore."
+                "The ticket could not be saved in Firestore."
             ),
             "error": str(error),
         }
 
 
 # =========================================================
-# 9. FIRESTORE RETRIEVE TICKET
+# 7. RETRIEVE TICKET
 # =========================================================
 
 def get_ticket_from_firestore(
     ticket_id: str,
 ) -> dict:
     """
-    Retrieve one ticket by exact ticket ID.
+    Retrieve one ticket using its exact ticket ID.
     """
 
     ticket_id = normalize_ticket_id(
@@ -520,6 +523,10 @@ def get_ticket_from_firestore(
                     "customer_name",
                     "Customer",
                 ),
+                "email": data.get(
+                    "email",
+                    "",
+                ),
                 "issue": data.get(
                     "issue",
                     "No description",
@@ -536,16 +543,12 @@ def get_ticket_from_firestore(
                     "priority",
                     "NORMAL",
                 ),
-                "email": data.get(
-                    "email",
-                    "",
-                ),
             },
         }
 
     except Exception as error:
         logger.exception(
-            "Firestore ticket retrieval failed."
+            "Ticket retrieval failed."
         )
 
         return {
@@ -558,14 +561,14 @@ def get_ticket_from_firestore(
 
 
 # =========================================================
-# 10. FIRESTORE FIND TICKETS
+# 8. FIND CUSTOMER TICKETS
 # =========================================================
 
 def find_tickets_in_firestore(
     email: str,
 ) -> dict:
     """
-    Find the customer's most recent tickets by email.
+    Find up to ten tickets using the registered email.
     """
 
     email = normalize_email(
@@ -576,7 +579,7 @@ def find_tickets_in_firestore(
         return {
             "ok": False,
             "message": (
-                "A valid customer email is required."
+                "A valid registered email is required."
             ),
             "tickets": [],
         }
@@ -624,7 +627,7 @@ def find_tickets_in_firestore(
 
     except Exception as error:
         logger.exception(
-            "Firestore ticket search failed."
+            "Ticket search failed."
         )
 
         return {
@@ -638,7 +641,7 @@ def find_tickets_in_firestore(
 
 
 # =========================================================
-# 11. FIRESTORE UPDATE TICKET
+# 9. UPDATE TICKET
 # =========================================================
 
 def update_ticket_in_firestore(
@@ -648,7 +651,7 @@ def update_ticket_in_firestore(
     new_status: str = "",
 ) -> dict:
     """
-    Update a ticket after registered-email verification.
+    Update a ticket after email verification.
     """
 
     ticket_id = normalize_ticket_id(
@@ -725,8 +728,8 @@ def update_ticket_in_firestore(
             return {
                 "ok": False,
                 "message": (
-                    "Status must be Open, "
-                    "In Progress, Resolved, or Closed."
+                    "Status must be Open, In Progress, "
+                    "Resolved, or Closed."
                 ),
             }
 
@@ -750,13 +753,12 @@ def update_ticket_in_firestore(
         ).update(changes)
 
         logger.info(
-            "Ticket updated successfully: %s",
+            "Ticket updated: %s",
             ticket_id,
         )
 
         return {
             "ok": True,
-            "ticket_id": ticket_id,
             "message": (
                 f"Ticket {ticket_id} was updated."
             ),
@@ -764,7 +766,7 @@ def update_ticket_in_firestore(
 
     except Exception as error:
         logger.exception(
-            "Firestore ticket update failed."
+            "Ticket update failed."
         )
 
         return {
@@ -777,7 +779,7 @@ def update_ticket_in_firestore(
 
 
 # =========================================================
-# 12. FIRESTORE DELETE TICKET
+# 10. DELETE TICKET
 # =========================================================
 
 def delete_ticket_from_firestore(
@@ -831,21 +833,20 @@ def delete_ticket_from_firestore(
         ).delete()
 
         logger.info(
-            "Ticket deleted successfully: %s",
+            "Ticket deleted: %s",
             ticket_id,
         )
 
         return {
             "ok": True,
-            "ticket_id": ticket_id,
             "message": (
-                f"Ticket {ticket_id} was deleted."
+                f"Ticket {ticket_id} was deleted permanently."
             ),
         }
 
     except Exception as error:
         logger.exception(
-            "Firestore ticket deletion failed."
+            "Ticket deletion failed."
         )
 
         return {
@@ -858,7 +859,7 @@ def delete_ticket_from_firestore(
 
 
 # =========================================================
-# 13. SEND TICKET EMAIL
+# 11. SEND CONFIRMATION EMAIL
 # =========================================================
 
 def send_ticket_email(
@@ -870,7 +871,7 @@ def send_ticket_email(
     order_id: str = "",
 ) -> dict:
     """
-    Send a confirmation email after Firestore succeeds.
+    Send a ticket confirmation email through Gmail SMTP.
     """
 
     customer_name = (
@@ -899,22 +900,14 @@ def send_ticket_email(
     )
 
     if not SMTP_SENDER_EMAIL:
-        logger.warning(
-            "SMTP_SENDER_EMAIL is missing."
-        )
-
         return {
             "ok": False,
             "message": (
-                "Sender email is not configured."
+                "SMTP sender email is not configured."
             ),
         }
 
     if not SMTP_APP_PASSWORD:
-        logger.warning(
-            "SMTP_APP_PASSWORD is missing."
-        )
-
         return {
             "ok": False,
             "message": (
@@ -952,10 +945,10 @@ def send_ticket_email(
         order_id
     )
 
-    plain_order_line = ""
+    order_plain_text = ""
 
     if order_id:
-        plain_order_line = (
+        order_plain_text = (
             f"Order ID: {order_id}\n"
         )
 
@@ -963,7 +956,7 @@ def send_ticket_email(
         f"Dear {customer_name},\n\n"
         "Your support ticket has been created successfully.\n\n"
         f"Ticket ID: {ticket_id}\n"
-        f"{plain_order_line}"
+        f"{order_plain_text}"
         f"Issue: {issue}\n"
         f"Status: {status}\n\n"
         "Please keep this ticket ID for future reference.\n\n"
@@ -971,10 +964,10 @@ def send_ticket_email(
         "Customer Support Team"
     )
 
-    html_order_row = ""
+    order_html_row = ""
 
     if safe_order_id:
-        html_order_row = f"""
+        order_html_row = f"""
         <tr>
           <td style="padding:8px;font-weight:bold;">
             Order ID
@@ -1001,7 +994,6 @@ def send_ticket_email(
           padding:24px;
           background:#ffffff;
           border-radius:12px;
-          box-shadow:0 4px 15px rgba(0,0,0,0.08);
       ">
         <h2 style="
             margin-top:0;
@@ -1032,7 +1024,7 @@ def send_ticket_email(
             </td>
           </tr>
 
-          {html_order_row}
+          {order_html_row}
 
           <tr>
             <td style="padding:8px;font-weight:bold;">
@@ -1054,7 +1046,7 @@ def send_ticket_email(
         </table>
 
         <p>
-          Please keep the ticket ID for future reference.
+          Please keep this ticket ID for future reference.
         </p>
 
         <p>
@@ -1076,7 +1068,9 @@ def send_ticket_email(
             f"<{SMTP_SENDER_EMAIL}>"
         )
 
-        message["To"] = recipient_email
+        message["To"] = (
+            recipient_email
+        )
 
         message["Subject"] = (
             f"Support Ticket Created: {ticket_id}"
@@ -1113,7 +1107,7 @@ def send_ticket_email(
             )
 
         logger.info(
-            "Ticket email sent successfully for %s.",
+            "Confirmation email sent for ticket %s.",
             ticket_id,
         )
 
@@ -1126,26 +1120,26 @@ def send_ticket_email(
 
     except Exception as error:
         logger.exception(
-            "Ticket email delivery failed."
+            "Confirmation email failed."
         )
 
         return {
             "ok": False,
             "message": (
                 "The ticket was created, but "
-                "the email could not be sent."
+                "the confirmation email could not be sent."
             ),
             "error": str(error),
         }
 
 
 # =========================================================
-# 14. CUSTOMER SUPPORT AGENT
+# 12. CUSTOMER SUPPORT AGENT
 # =========================================================
 
 class CustomerSupportAgent(Agent):
     """
-    Customer-service agent with real Firestore tools.
+    Realtime customer support agent with Firebase CRUD tools.
     """
 
     def __init__(
@@ -1172,62 +1166,59 @@ class CustomerSupportAgent(Agent):
                 f"The supported languages are "
                 f"{SUPPORTED_LANGUAGES}. "
 
-                "At the start, greet the customer and ask which "
-                "supported language the customer wants to use. "
+                "At the beginning, greet the customer and ask "
+                "which supported language should be used. "
 
                 "After the customer chooses a language, continue "
                 "in that language. "
 
-                "Keep responses short. Use no more than one or "
-                "two short sentences. "
+                "Use one or two short sentences. "
 
-                "The website may already contain the customer's "
-                "name, email, and order ID. "
+                "The customer may submit name, email, and order ID "
+                "through the website. "
 
-                "Before asking for customer name, email, or order "
-                "ID, call get_submitted_details. "
+                "Before requesting name, email, or order ID, call "
+                "get_submitted_details. "
 
-                "Do not repeatedly ask for information that was "
-                "already submitted. "
+                "The email typed into the website is more reliable "
+                "than an email interpreted from speech. "
 
-                "When the customer asks to create or raise a "
-                "support ticket, collect the issue description. "
+                "Always use the website-submitted email before an "
+                "email heard through speech. "
 
-                "Once the issue is known, call "
-                "create_support_ticket immediately. "
+                "Never repeatedly request an email when a valid "
+                "website email was already received. "
+
+                "When the customer requests a ticket, collect the "
+                "issue and call create_support_ticket. "
 
                 "Never invent a ticket ID. "
 
-                "Never claim a ticket was created unless the "
-                "create_support_ticket tool confirms that the "
-                "Firestore write succeeded. "
+                "Never report that a ticket was created unless the "
+                "create_support_ticket tool confirms success. "
 
-                "After successful ticket creation, clearly state "
-                "the ticket ID and whether the confirmation email "
-                "was sent. "
+                "After successful creation, say the ticket ID and "
+                "whether the confirmation email was sent. "
 
-                "For ticket retrieval, call get_support_ticket. "
+                "Use get_support_ticket to retrieve one ticket. "
 
-                "For ticket search, call find_support_tickets. "
+                "Use find_support_tickets to search the customer's "
+                "tickets. "
 
-                "For ticket updates, call update_support_ticket. "
+                "Use update_support_ticket to update a ticket. "
 
-                "Before permanent deletion, get explicit customer "
-                "confirmation and then call delete_support_ticket."
+                "Obtain explicit confirmation before calling "
+                "delete_support_ticket."
             )
         )
 
-
-    # =====================================================
-    # TOOL: GET SUBMITTED DETAILS
-    # =====================================================
 
     @function_tool
     async def get_submitted_details(
         self,
     ) -> str:
         """
-        Retrieve customer details submitted through the website.
+        Get name, email and order details submitted on the website.
         """
 
         customer_name = clean_text(
@@ -1236,7 +1227,7 @@ class CustomerSupportAgent(Agent):
             )
         )
 
-        email = normalize_email(
+        submitted_email = normalize_email(
             self.customer_details.get(
                 "email"
             )
@@ -1255,10 +1246,18 @@ class CustomerSupportAgent(Agent):
                 f"customer name is {customer_name}"
             )
 
-        if email:
-            details.append(
-                "the registered email was received securely"
-            )
+        if submitted_email:
+            if validate_email(
+                submitted_email
+            ):
+                details.append(
+                    "a valid registered email was "
+                    "received through the website"
+                )
+            else:
+                details.append(
+                    "the website email has an invalid format"
+                )
 
         if order_id:
             details.append(
@@ -1267,161 +1266,230 @@ class CustomerSupportAgent(Agent):
 
         if not details:
             return (
-                "No details were submitted through the website."
+                "No customer details were submitted "
+                "through the website."
             )
 
         return (
-            "The website has already provided these details: "
+            "The website already provided these details: "
             + "; ".join(details)
-            + ". Do not ask for these values again."
+            + ". Do not ask for valid details again."
         )
 
-
-    # =====================================================
-    # TOOL: CREATE TICKET
-    # =====================================================
 
     @function_tool
-    @function_tool
-async def create_support_ticket(
-    self,
-    issue: str,
-    customer_name: str = "",
-    email: str = "",
-    order_id: str = "",
-) -> str:
-    """
-    Create and store a support ticket in Firestore.
+    async def create_support_ticket(
+        self,
+        issue: str,
+        customer_name: str = "",
+        email: str = "",
+        order_id: str = "",
+    ) -> str:
+        """
+        Create a support ticket and send a confirmation email.
 
-    Website-submitted details take priority over values
-    interpreted from speech.
+        Website details always take priority over speech input.
 
-    Args:
-        issue: Description of the customer's problem.
-        customer_name: Customer name if spoken.
-        email: Customer email if spoken.
-        order_id: Related order ID if available.
-    """
+        Args:
+            issue: Description of the customer problem.
+            customer_name: Customer name heard through speech.
+            email: Customer email heard through speech.
+            order_id: Related order ID.
+        """
 
-    submitted_customer_name = clean_text(
-        self.customer_details.get(
-            "customer_name"
-        )
-    )
-
-    submitted_email = normalize_email(
-        self.customer_details.get(
-            "email"
-        )
-    )
-
-    submitted_order_id = normalize_order_id(
-        self.customer_details.get(
-            "order_id"
-        )
-    )
-
-    spoken_customer_name = clean_text(
-        customer_name
-    )
-
-    spoken_email = normalize_email(
-        email
-    )
-
-    spoken_order_id = normalize_order_id(
-        order_id
-    )
-
-    # Website values take priority because typed values
-    # are more reliable than voice transcription.
-    final_customer_name = (
-        submitted_customer_name
-        or spoken_customer_name
-    )
-
-    final_email = (
-        submitted_email
-        or spoken_email
-    )
-
-    final_order_id = (
-        submitted_order_id
-        or spoken_order_id
-    )
-
-    final_issue = clean_text(
-        issue
-    )
-
-    logger.info(
-        "Preparing ticket. "
-        "Submitted name available: %s. "
-        "Submitted email available: %s. "
-        "Submitted order available: %s.",
-        bool(submitted_customer_name),
-        bool(submitted_email),
-        bool(submitted_order_id),
-    )
-
-    if not final_customer_name:
-        return (
-            "Ticket was not created. "
-            "Please provide only your name."
+        submitted_name = clean_text(
+            self.customer_details.get(
+                "customer_name"
+            )
         )
 
-    if not final_email:
-        return (
-            "Ticket was not created. "
-            "Please type your email in the website form "
-            "and press Submit Details to Agent."
+        submitted_email = normalize_email(
+            self.customer_details.get(
+                "email"
+            )
         )
 
-    if not validate_email(
-        final_email
-    ):
-        logger.warning(
-            "Ticket email validation failed. "
-            "Email source: %s.",
-            (
-                "website"
-                if submitted_email
-                else "speech"
-            ),
+        submitted_order_id = normalize_order_id(
+            self.customer_details.get(
+                "order_id"
+            )
         )
 
-        return (
-            "Ticket was not created because the submitted "
-            "email format is invalid. Please type the email "
-            "in the website form and submit it again."
+        spoken_name = clean_text(
+            customer_name
         )
 
-    if not final_issue:
-        return (
-            "Ticket was not created. "
-            "Please describe the issue."
+        spoken_email = normalize_email(
+            email
         )
 
-    database_result = await asyncio.to_thread(
-        create_ticket_in_firestore,
-        final_customer_name,
-        final_email,
-        final_issue,
-        final_order_id,
-        "NORMAL",
-        "Open",
-    )
+        spoken_order_id = normalize_order_id(
+            order_id
+        )
 
-    if not database_result.get(
-        "ok"
-    ):
-        logger.error(
-            "Ticket database operation failed: %s",
-            database_result.get(
-                "error",
+        # Typed website details are more reliable.
+        final_customer_name = (
+            submitted_name
+            or spoken_name
+        )
+
+        final_email = (
+            submitted_email
+            or spoken_email
+        )
+
+        final_order_id = (
+            submitted_order_id
+            or spoken_order_id
+        )
+
+        final_issue = clean_text(
+            issue
+        )
+
+        logger.info(
+            "Preparing ticket. "
+            "Website name: %s. "
+            "Website email: %s. "
+            "Website order: %s.",
+            bool(submitted_name),
+            bool(submitted_email),
+            bool(submitted_order_id),
+        )
+
+        if not final_customer_name:
+            return (
+                "Ticket was not created. "
+                "Please provide only your name."
+            )
+
+        if not final_email:
+            return (
+                "Ticket was not created. "
+                "Please type the email in the website "
+                "and press Submit Details to Agent."
+            )
+
+        if not validate_email(
+            final_email
+        ):
+            logger.warning(
+                "Email validation failed. Source: %s",
+                (
+                    "website"
+                    if submitted_email
+                    else "speech"
+                ),
+            )
+
+            return (
+                "Ticket was not created because the submitted "
+                "email format is invalid. Please enter the email "
+                "again in the website form."
+            )
+
+        if not final_issue:
+            return (
+                "Ticket was not created. "
+                "Please describe the issue."
+            )
+
+        database_result = await asyncio.to_thread(
+            create_ticket_in_firestore,
+            final_customer_name,
+            final_email,
+            final_issue,
+            final_order_id,
+            "NORMAL",
+            "Open",
+        )
+
+        if not database_result.get("ok"):
+            logger.error(
+                "Ticket database error: %s",
                 database_result.get(
+                    "error",
+                    database_result.get(
+                        "message",
+                        "Unknown database error",
+                    ),
+                ),
+            )
+
+            await self.send_browser_event({
+                "type": "status",
+                "message": (
+                    "Ticket creation failed."
+                ),
+            })
+
+            return (
+                "The ticket could not be saved. "
+                "Please try again."
+            )
+
+        ticket_id = (
+            database_result[
+                "ticket_id"
+            ]
+        )
+
+        self.customer_details.update({
+            "customer_name": (
+                final_customer_name
+            ),
+            "email": final_email,
+            "order_id": final_order_id,
+            "last_ticket_id": ticket_id,
+            "last_issue": final_issue,
+        })
+
+        await self.send_browser_event({
+            "type": "ticket_created",
+            "ticket_id": ticket_id,
+            "status": "Open",
+        })
+
+        await self.send_browser_event({
+            "type": "transcript",
+            "sender": "System",
+            "text": (
+                f"Ticket {ticket_id} was saved successfully."
+            ),
+        })
+
+        email_result = await asyncio.to_thread(
+            send_ticket_email,
+            final_customer_name,
+            final_email,
+            ticket_id,
+            final_issue,
+            "Open",
+            final_order_id,
+        )
+
+        if email_result.get("ok"):
+            await self.send_browser_event({
+                "type": "status",
+                "message": (
+                    "Ticket created and email sent."
+                ),
+            })
+
+            return (
+                f"Ticket {ticket_id} was created successfully. "
+                "A confirmation email was sent to the "
+                "registered email address."
+            )
+
+        logger.warning(
+            "Ticket %s was saved, but email failed: %s",
+            ticket_id,
+            email_result.get(
+                "error",
+                email_result.get(
                     "message",
-                    "Unknown error",
+                    "Unknown email error",
                 ),
             ),
         )
@@ -1429,98 +1497,15 @@ async def create_support_ticket(
         await self.send_browser_event({
             "type": "status",
             "message": (
-                "Ticket creation failed."
-            ),
-        })
-
-        return (
-            "The ticket could not be saved. "
-            "Please try again."
-        )
-
-    ticket_id = database_result[
-        "ticket_id"
-    ]
-
-    self.customer_details.update({
-        "customer_name": (
-            final_customer_name
-        ),
-        "email": final_email,
-        "order_id": final_order_id,
-        "last_ticket_id": ticket_id,
-        "last_issue": final_issue,
-    })
-
-    await self.send_browser_event({
-        "type": "ticket_created",
-        "ticket_id": ticket_id,
-        "status": "Open",
-    })
-
-    await self.send_browser_event({
-        "type": "transcript",
-        "sender": "System",
-        "text": (
-            f"Ticket {ticket_id} was saved "
-            "successfully."
-        ),
-    })
-
-    email_result = await asyncio.to_thread(
-        send_ticket_email,
-        final_customer_name,
-        final_email,
-        ticket_id,
-        final_issue,
-        "Open",
-        final_order_id,
-    )
-
-    if email_result.get(
-        "ok"
-    ):
-        await self.send_browser_event({
-            "type": "status",
-            "message": (
-                "Ticket created and email sent."
+                "Ticket created, but email delivery failed."
             ),
         })
 
         return (
             f"Ticket {ticket_id} was created successfully. "
-            "A confirmation email was sent to the "
-            "registered email address."
+            "The confirmation email could not be sent."
         )
 
-    logger.warning(
-        "Ticket %s was saved, but email delivery failed: %s",
-        ticket_id,
-        email_result.get(
-            "error",
-            email_result.get(
-                "message",
-                "Unknown email error",
-            ),
-        ),
-    )
-
-    await self.send_browser_event({
-        "type": "status",
-        "message": (
-            "Ticket created, but email delivery failed."
-        ),
-    })
-
-    return (
-        f"Ticket {ticket_id} was created successfully. "
-        "However, the confirmation email could not be sent."
-    )
-
-
-    # =====================================================
-    # TOOL: RETRIEVE TICKET
-    # =====================================================
 
     @function_tool
     async def get_support_ticket(
@@ -1542,7 +1527,9 @@ async def create_support_ticket(
                 "The ticket could not be retrieved.",
             )
 
-        ticket = result["ticket"]
+        ticket = result[
+            "ticket"
+        ]
 
         return (
             f"Ticket {ticket['ticket_id']} is "
@@ -1551,31 +1538,41 @@ async def create_support_ticket(
         )
 
 
-    # =====================================================
-    # TOOL: FIND CUSTOMER TICKETS
-    # =====================================================
-
     @function_tool
     async def find_support_tickets(
         self,
         email: str = "",
     ) -> str:
         """
-        Find customer tickets using registered email.
+        Find tickets using the registered customer email.
         """
 
-        final_email = (
-            normalize_email(email)
-            or normalize_email(
-                self.customer_details.get(
-                    "email"
-                )
+        submitted_email = normalize_email(
+            self.customer_details.get(
+                "email"
             )
+        )
+
+        spoken_email = normalize_email(
+            email
+        )
+
+        final_email = (
+            submitted_email
+            or spoken_email
         )
 
         if not final_email:
             return (
-                "Ask only for the registered email address."
+                "Please type the registered email in the "
+                "website and submit it."
+            )
+
+        if not validate_email(
+            final_email
+        ):
+            return (
+                "The submitted email format is invalid."
             )
 
         result = await asyncio.to_thread(
@@ -1614,10 +1611,6 @@ async def create_support_ticket(
         )
 
 
-    # =====================================================
-    # TOOL: UPDATE TICKET
-    # =====================================================
-
     @function_tool
     async def update_support_ticket(
         self,
@@ -1628,22 +1621,27 @@ async def create_support_ticket(
     ) -> str:
         """
         Update a ticket issue or status.
-
-        Registered email is required for verification.
         """
 
-        final_email = (
-            normalize_email(email)
-            or normalize_email(
-                self.customer_details.get(
-                    "email"
-                )
+        submitted_email = normalize_email(
+            self.customer_details.get(
+                "email"
             )
+        )
+
+        spoken_email = normalize_email(
+            email
+        )
+
+        final_email = (
+            submitted_email
+            or spoken_email
         )
 
         if not final_email:
             return (
-                "Ask only for the registered email address."
+                "Please submit the registered email "
+                "through the website."
             )
 
         result = await asyncio.to_thread(
@@ -1660,10 +1658,6 @@ async def create_support_ticket(
         )
 
 
-    # =====================================================
-    # TOOL: DELETE TICKET
-    # =====================================================
-
     @function_tool
     async def delete_support_ticket(
         self,
@@ -1672,33 +1666,34 @@ async def create_support_ticket(
         email: str = "",
     ) -> str:
         """
-        Permanently delete a verified support ticket.
-
-        Args:
-            ticket_id: Exact ticket ID.
-            confirmed: True only after explicit confirmation.
-            email: Registered email if not already submitted.
+        Permanently delete a ticket after explicit confirmation.
         """
 
         if not confirmed:
             return (
                 "The ticket was not deleted. "
-                "Ask the customer to explicitly confirm "
-                "permanent deletion."
+                "Please explicitly confirm permanent deletion."
             )
 
-        final_email = (
-            normalize_email(email)
-            or normalize_email(
-                self.customer_details.get(
-                    "email"
-                )
+        submitted_email = normalize_email(
+            self.customer_details.get(
+                "email"
             )
+        )
+
+        spoken_email = normalize_email(
+            email
+        )
+
+        final_email = (
+            submitted_email
+            or spoken_email
         )
 
         if not final_email:
             return (
-                "Ask only for the registered email address."
+                "Please submit the registered email "
+                "through the website."
             )
 
         result = await asyncio.to_thread(
@@ -1722,14 +1717,14 @@ async def create_support_ticket(
 
 
 # =========================================================
-# 15. LIVEKIT SESSION ENTRY POINT
+# 13. LIVEKIT SESSION
 # =========================================================
 
 async def entrypoint(
     ctx: JobContext,
 ) -> None:
     """
-    Run one customer-support voice session.
+    Start one realtime customer-support call.
     """
 
     logger.info(
@@ -1760,10 +1755,6 @@ async def entrypoint(
         raise
 
 
-    # =====================================================
-    # BROWSER EVENT PUBLISHER
-    # =====================================================
-
     async def send_browser_event(
         event_data: dict,
     ) -> None:
@@ -1788,13 +1779,9 @@ async def entrypoint(
 
         except Exception:
             logger.exception(
-                "Browser event publishing failed."
+                "Browser event could not be sent."
             )
 
-
-    # =====================================================
-    # CREATE AGENT AND SESSION
-    # =====================================================
 
     support_agent = CustomerSupportAgent(
         customer_details,
@@ -1809,13 +1796,14 @@ async def entrypoint(
             temperature=0.2,
             instructions=(
                 "Respond quickly and naturally. "
-                "Use no more than two short sentences. "
-                "Use a function tool whenever an operation must "
-                "be performed. "
-                "Never pretend to create, retrieve, update, or "
-                "delete a ticket without calling the relevant "
-                "tool. "
-                "Never invent a ticket ID."
+                "Use at most two short sentences. "
+                "Use function tools whenever an operation "
+                "must be performed. "
+                "Never pretend that a ticket was created, "
+                "retrieved, updated, or deleted. "
+                "Never invent a ticket ID. "
+                "Prefer values typed into the website over "
+                "values interpreted from speech."
             ),
         )
     )
@@ -1907,7 +1895,7 @@ async def entrypoint(
 
 
     # =====================================================
-    # RECEIVE HTML FORM DATA
+    # RECEIVE WEBSITE DETAILS
     # =====================================================
 
     @ctx.room.on(
@@ -1916,7 +1904,7 @@ async def entrypoint(
     def on_data_received(
         data_packet,
     ) -> None:
-        async def process_data_packet() -> None:
+        async def process_data() -> None:
             try:
                 payload = json.loads(
                     data_packet.data.decode(
@@ -1926,11 +1914,6 @@ async def entrypoint(
 
                 action = clean_text(
                     payload.get("type")
-                )
-
-                logger.info(
-                    "Browser action received: %s",
-                    action,
                 )
 
                 if action == "email_submission":
@@ -1969,11 +1952,18 @@ async def entrypoint(
                             "order_id"
                         ] = submitted_order_id
 
+                    email_is_valid = (
+                        validate_email(
+                            customer_details[
+                                "email"
+                            ]
+                        )
+                    )
+
                     logger.info(
-                        "Customer details updated. "
-                        "Name present: %s. "
-                        "Email present: %s. "
-                        "Order present: %s.",
+                        "Website details received. "
+                        "Name: %s. Email: %s. "
+                        "Email valid: %s. Order: %s.",
                         bool(
                             customer_details[
                                 "customer_name"
@@ -1984,12 +1974,36 @@ async def entrypoint(
                                 "email"
                             ]
                         ),
+                        email_is_valid,
                         bool(
                             customer_details[
                                 "order_id"
                             ]
                         ),
                     )
+
+                    if (
+                        customer_details["email"]
+                        and not email_is_valid
+                    ):
+                        await send_browser_event({
+                            "type": "status",
+                            "message": (
+                                "The submitted email format "
+                                "is invalid."
+                            ),
+                        })
+
+                        await send_browser_event({
+                            "type": "transcript",
+                            "sender": "System",
+                            "text": (
+                                "The submitted email format "
+                                "is invalid. Please correct it."
+                            ),
+                        })
+
+                        return
 
                     await send_browser_event({
                         "type": "status",
@@ -2009,35 +2023,15 @@ async def entrypoint(
 
                     await session.generate_reply(
                         instructions=(
-                            "The customer submitted details "
-                            "through the website. "
-                            "Call get_submitted_details now. "
+                            "The website just supplied customer "
+                            "details. Call get_submitted_details. "
                             "Confirm receipt in one short sentence. "
-                            "Do not ask again for any detail that "
-                            "was already submitted."
+                            "Do not ask for a valid submitted email "
+                            "again."
                         )
                     )
 
                 elif action == "manual_escalate":
-                    escalation_issue = (
-                        clean_text(
-                            payload.get(
-                                "reason"
-                            )
-                        )
-                        or customer_details.get(
-                            "last_issue"
-                        )
-                        or (
-                            "Customer requested "
-                            "manual escalation"
-                        )
-                    )
-
-                    customer_details[
-                        "last_issue"
-                    ] = escalation_issue
-
                     await send_browser_event({
                         "type": "transcript",
                         "sender": "System",
@@ -2049,24 +2043,23 @@ async def entrypoint(
 
                     await session.generate_reply(
                         instructions=(
-                            "The customer requested escalation. "
-                            "Briefly confirm that the request "
-                            "was received."
+                            "Confirm the customer's escalation "
+                            "request in one short sentence."
                         )
                     )
 
             except Exception:
                 logger.exception(
-                    "Browser data processing failed."
+                    "Website data processing failed."
                 )
 
         asyncio.create_task(
-            process_data_packet()
+            process_data()
         )
 
 
     # =====================================================
-    # START REALTIME SESSION
+    # START GEMINI LIVE SESSION
     # =====================================================
 
     try:
@@ -2083,7 +2076,7 @@ async def entrypoint(
         )
 
         logger.info(
-            "Gemini Live session started successfully."
+            "Gemini Live session started."
         )
 
         await send_browser_event({
@@ -2096,13 +2089,12 @@ async def entrypoint(
             instructions=(
                 "Speak immediately. "
                 f"Say exactly: {WELCOME_MESSAGE} "
-                "Do not add another explanation. "
-                "Wait for the customer to choose a language."
+                "Then wait for the customer's language choice."
             )
         )
 
         logger.info(
-            "Welcome message requested successfully."
+            "Welcome message requested."
         )
 
     except Exception:
@@ -2114,7 +2106,7 @@ async def entrypoint(
             "type": "transcript",
             "sender": "System",
             "text": (
-                "The voice-agent session could not start. "
+                "The voice agent could not start. "
                 "Please check the worker logs."
             ),
         })
@@ -2123,7 +2115,7 @@ async def entrypoint(
 
 
 # =========================================================
-# 16. START WORKER
+# 14. START WORKER
 # =========================================================
 
 if __name__ == "__main__":
