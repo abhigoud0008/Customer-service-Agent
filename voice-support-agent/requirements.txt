@@ -1,4 +1,4 @@
-livekit-agents[google]~=1.8
+livekit-agents[google]==1.8.3
 python-dotenv
 firebase-admin
 
