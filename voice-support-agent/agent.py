@@ -76,7 +76,7 @@ GEMINI_LIVE_MODEL = os.getenv(
 
 GEMINI_VOICE = os.getenv(
     "GEMINI_VOICE",
-    "Flare",
+    "Zephyr",
 )
 
 
