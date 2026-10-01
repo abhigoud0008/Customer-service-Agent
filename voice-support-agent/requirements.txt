@@ -1,7 +1,6 @@
-livekit-agents==0.12.1
-livekit-plugins-silero==0.7.1
-livekit-plugins-google==0.7.1
-firebase-admin
+livekit-agents[google]~=1.8
 python-dotenv
+firebase-admin
+
 fastapi
 uvicorn
