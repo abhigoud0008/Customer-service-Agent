@@ -1282,177 +1282,240 @@ class CustomerSupportAgent(Agent):
     # =====================================================
 
     @function_tool
-    async def create_support_ticket(
-        self,
-        issue: str,
-        customer_name: str = "",
-        email: str = "",
-        order_id: str = "",
-    ) -> str:
-        """
-        Create and store a support ticket in Firestore.
+    @function_tool
+async def create_support_ticket(
+    self,
+    issue: str,
+    customer_name: str = "",
+    email: str = "",
+    order_id: str = "",
+) -> str:
+    """
+    Create and store a support ticket in Firestore.
 
-        Use the website-submitted name, email, and order ID
-        when the corresponding function arguments are empty.
+    Website-submitted details take priority over values
+    interpreted from speech.
 
-        Args:
-            issue: Description of the customer's problem.
-            customer_name: Customer name if spoken.
-            email: Customer email if spoken.
-            order_id: Related order ID if available.
-        """
+    Args:
+        issue: Description of the customer's problem.
+        customer_name: Customer name if spoken.
+        email: Customer email if spoken.
+        order_id: Related order ID if available.
+    """
 
-        final_customer_name = (
-            clean_text(customer_name)
-            or clean_text(
-                self.customer_details.get(
-                    "customer_name"
-                )
-            )
+    submitted_customer_name = clean_text(
+        self.customer_details.get(
+            "customer_name"
+        )
+    )
+
+    submitted_email = normalize_email(
+        self.customer_details.get(
+            "email"
+        )
+    )
+
+    submitted_order_id = normalize_order_id(
+        self.customer_details.get(
+            "order_id"
+        )
+    )
+
+    spoken_customer_name = clean_text(
+        customer_name
+    )
+
+    spoken_email = normalize_email(
+        email
+    )
+
+    spoken_order_id = normalize_order_id(
+        order_id
+    )
+
+    # Website values take priority because typed values
+    # are more reliable than voice transcription.
+    final_customer_name = (
+        submitted_customer_name
+        or spoken_customer_name
+    )
+
+    final_email = (
+        submitted_email
+        or spoken_email
+    )
+
+    final_order_id = (
+        submitted_order_id
+        or spoken_order_id
+    )
+
+    final_issue = clean_text(
+        issue
+    )
+
+    logger.info(
+        "Preparing ticket. "
+        "Submitted name available: %s. "
+        "Submitted email available: %s. "
+        "Submitted order available: %s.",
+        bool(submitted_customer_name),
+        bool(submitted_email),
+        bool(submitted_order_id),
+    )
+
+    if not final_customer_name:
+        return (
+            "Ticket was not created. "
+            "Please provide only your name."
         )
 
-        final_email = (
-            normalize_email(email)
-            or normalize_email(
-                self.customer_details.get(
-                    "email"
-                )
-            )
+    if not final_email:
+        return (
+            "Ticket was not created. "
+            "Please type your email in the website form "
+            "and press Submit Details to Agent."
         )
 
-        final_order_id = (
-            normalize_order_id(order_id)
-            or normalize_order_id(
-                self.customer_details.get(
-                    "order_id"
-                )
-            )
+    if not validate_email(
+        final_email
+    ):
+        logger.warning(
+            "Ticket email validation failed. "
+            "Email source: %s.",
+            (
+                "website"
+                if submitted_email
+                else "speech"
+            ),
         )
 
-        final_issue = clean_text(
-            issue
+        return (
+            "Ticket was not created because the submitted "
+            "email format is invalid. Please type the email "
+            "in the website form and submit it again."
         )
 
-        if not final_customer_name:
-            return (
-                "Ticket was not created. "
-                "Ask only for the customer's name."
-            )
-
-        if not final_email:
-            return (
-                "Ticket was not created. "
-                "Ask only for the customer's email."
-            )
-
-        if not validate_email(
-            final_email
-        ):
-            return (
-                "Ticket was not created because the submitted "
-                "email is invalid. Ask for a valid email."
-            )
-
-        if not final_issue:
-            return (
-                "Ticket was not created. "
-                "Ask only for the issue description."
-            )
-
-        logger.info(
-            "Creating Firestore ticket for submitted customer."
+    if not final_issue:
+        return (
+            "Ticket was not created. "
+            "Please describe the issue."
         )
 
-        database_result = await asyncio.to_thread(
-            create_ticket_in_firestore,
-            final_customer_name,
-            final_email,
-            final_issue,
-            final_order_id,
-            "NORMAL",
-            "Open",
-        )
+    database_result = await asyncio.to_thread(
+        create_ticket_in_firestore,
+        final_customer_name,
+        final_email,
+        final_issue,
+        final_order_id,
+        "NORMAL",
+        "Open",
+    )
 
-        if not database_result.get("ok"):
-            await self.send_browser_event({
-                "type": "status",
-                "message": (
-                    "Ticket creation failed."
-                ),
-            })
-
-            return (
-                "Ticket creation failed. "
-                + database_result.get(
+    if not database_result.get(
+        "ok"
+    ):
+        logger.error(
+            "Ticket database operation failed: %s",
+            database_result.get(
+                "error",
+                database_result.get(
                     "message",
-                    "The database operation failed.",
-                )
-            )
-
-        ticket_id = database_result[
-            "ticket_id"
-        ]
-
-        self.customer_details.update({
-            "customer_name": (
-                final_customer_name
-            ),
-            "email": final_email,
-            "order_id": final_order_id,
-            "last_ticket_id": ticket_id,
-            "last_issue": final_issue,
-        })
-
-        await self.send_browser_event({
-            "type": "ticket_created",
-            "ticket_id": ticket_id,
-            "status": "Open",
-        })
-
-        await self.send_browser_event({
-            "type": "transcript",
-            "sender": "System",
-            "text": (
-                f"Ticket {ticket_id} was saved successfully "
-                "in the support database."
-            ),
-        })
-
-        email_result = await asyncio.to_thread(
-            send_ticket_email,
-            final_customer_name,
-            final_email,
-            ticket_id,
-            final_issue,
-            "Open",
-            final_order_id,
-        )
-
-        if email_result.get("ok"):
-            await self.send_browser_event({
-                "type": "status",
-                "message": (
-                    "Ticket created and email sent."
+                    "Unknown error",
                 ),
-            })
-
-            return (
-                f"Ticket {ticket_id} was created successfully. "
-                "A confirmation email was sent to the registered "
-                "email address."
-            )
+            ),
+        )
 
         await self.send_browser_event({
             "type": "status",
             "message": (
-                "Ticket created, but email failed."
+                "Ticket creation failed."
+            ),
+        })
+
+        return (
+            "The ticket could not be saved. "
+            "Please try again."
+        )
+
+    ticket_id = database_result[
+        "ticket_id"
+    ]
+
+    self.customer_details.update({
+        "customer_name": (
+            final_customer_name
+        ),
+        "email": final_email,
+        "order_id": final_order_id,
+        "last_ticket_id": ticket_id,
+        "last_issue": final_issue,
+    })
+
+    await self.send_browser_event({
+        "type": "ticket_created",
+        "ticket_id": ticket_id,
+        "status": "Open",
+    })
+
+    await self.send_browser_event({
+        "type": "transcript",
+        "sender": "System",
+        "text": (
+            f"Ticket {ticket_id} was saved "
+            "successfully."
+        ),
+    })
+
+    email_result = await asyncio.to_thread(
+        send_ticket_email,
+        final_customer_name,
+        final_email,
+        ticket_id,
+        final_issue,
+        "Open",
+        final_order_id,
+    )
+
+    if email_result.get(
+        "ok"
+    ):
+        await self.send_browser_event({
+            "type": "status",
+            "message": (
+                "Ticket created and email sent."
             ),
         })
 
         return (
             f"Ticket {ticket_id} was created successfully. "
-            "However, the confirmation email could not be sent."
+            "A confirmation email was sent to the "
+            "registered email address."
         )
+
+    logger.warning(
+        "Ticket %s was saved, but email delivery failed: %s",
+        ticket_id,
+        email_result.get(
+            "error",
+            email_result.get(
+                "message",
+                "Unknown email error",
+            ),
+        ),
+    )
+
+    await self.send_browser_event({
+        "type": "status",
+        "message": (
+            "Ticket created, but email delivery failed."
+        ),
+    })
+
+    return (
+        f"Ticket {ticket_id} was created successfully. "
+        "However, the confirmation email could not be sent."
+    )
 
 
     # =====================================================
